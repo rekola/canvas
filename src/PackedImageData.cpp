@@ -30,7 +30,7 @@ PackedImageData::PackedImageData(InternalFormat format, unsigned short levels, c
   unsigned int bytesPerRow = getBytesPerRow(), bytesPerPixel = getBytesPerPixel();
     
   auto s = calculateSize();
-  data_ = std::unique_ptr<unsigned char[]>(new unsigned char[s]);
+  data_ = std::make_unique<unsigned char[]>(s);
   memset(data_.get(), 0, s);
   
   if ((num_channels == 4 && (format == InternalFormat::RGB8 || format == InternalFormat::RGBA8)) ||
@@ -113,7 +113,7 @@ PackedImageData::PackedImageData(InternalFormat format, unsigned short levels, c
 PackedImageData::PackedImageData(InternalFormat format, unsigned short width, unsigned short height, unsigned short levels, const unsigned char * input)
   : width_(width), height_(height), levels_(levels), format_(format) {
   size_t s = calculateSize();
-  data_ = std::unique_ptr<unsigned char[]>(new unsigned char[s]);
+  data_ = std::make_unique<unsigned char[]>(s);
   if (input) {
     memcpy(data_.get(), input, s);
   } else {
@@ -153,7 +153,7 @@ PackedImageData::createMipmaps(const ImageData & input_data, unsigned short targ
   assert(!fd.getCompression());
   assert(levels == 1);
   size_t target_size = calculateOffset(target_levels);
-  std::unique_ptr<unsigned char[]> output_data(new unsigned char[target_size]);
+  auto output_data = std::make_unique<unsigned char[]>(target_size);
   memcpy(output_data_.get(), data_.get(), calculateOffset(1));
   unsigned short source_width = width, source_height = height;
   unsigned short target_width = width / 2, target_height = height / 2;
@@ -179,7 +179,7 @@ PackedImageData::createMipmaps(const ImageData & input_data, unsigned short targ
     target_width /= 2;
     target_height /= 2;
   }
-  return unique_ptr<ImageData>(new ImageData(output_data_.get(), getInternalFormat(), width, height, target_levels));
+  return make_unique<ImageData>(output_data_.get(), getInternalFormat(), width, height, target_levels);
 }
 
 std::unique_ptr<ImageData>
@@ -200,7 +200,7 @@ ImageData::convert(InternalFormat target_format) const {
     assert((height & 3) == 0);
     unsigned short target_width = width, target_height = height;
     unsigned int target_size = calculateSize(target_width, target_height, levels, target_format);
-    std::unique_ptr<unsigned char[]> output_data(new unsigned char[target_size]);
+    auto output_data = std::make_unique<unsigned char[]>(target_size);
     unsigned char input_block[4*4*8];
     unsigned int target_offset = 0;
     for (unsigned int level = 0; level < levels; level++) {
@@ -256,12 +256,12 @@ ImageData::convert(InternalFormat target_format) const {
       target_width = (target_width + 1) / 2;
       target_height = (target_height + 1) / 2;
     }
-    return unique_ptr<ImageData>(new ImageData(output_data_.get(), target_format, width, height, levels));
+    return make_unique<ImageData>(output_data_.get(), target_format, width, height, levels);
   } else if (target_fd.getNumChannels() == 1) {
     assert(levels == 1);
     
     unsigned int n = width * height;
-    std::unique_ptr<unsigned char[]> tmp(new unsigned char[target_fd.getBytesPerPixel() * n]);
+    auto tmp = std::make_unique<unsigned char[]>(target_fd.getBytesPerPixel() * n);
     unsigned char * output_data = (unsigned char *)tmp.get();
     
     for (unsigned int i = 0; i < n; i++) {
@@ -272,12 +272,12 @@ ImageData::convert(InternalFormat target_format) const {
       *output_data++ = (r + g + b) / 3;
     }
 
-    return unique_ptr<ImageData>(new ImageData(tmp.get(), target_format, getWidth(), getHeight()));
+    return make_unique<ImageData>(tmp.get(), target_format, getWidth(), getHeight());
   } else {
     assert(target_fd.getBytesPerPixel() == 2);
     auto target_size = calculateSize(getWidth(), getHeight(), getLevels(), target_format);
-    std::unique_ptr<unsigned char[]> tmp(new unsigned char[target_size]);
-    unsigned short * output_data = (unsigned short *)tmp.get();
+    auto tmp = std::make_unique<unsigned char[]>(target_size);
+    auto output_data = reinterpret_cast<unsigned short *>(tmp.get());
     auto n = calculateSize() / fd.getBytesPerPixel();
     if (target_fd.getNumChannels() == 2) {
       for (auto i = 0; i < n; i++) {
@@ -305,7 +305,7 @@ ImageData::convert(InternalFormat target_format) const {
       }
     }
     
-    return unique_ptr<ImageData>(new ImageData(tmp.get(), target_format, getWidth(), getHeight(), getLevels()));
+    return make_unique<ImageData>(tmp.get(), target_format, getWidth(), getHeight(), getLevels());
   }
 }
 
@@ -315,7 +315,7 @@ ImageData::scale(unsigned short target_base_width, unsigned short target_base_he
   assert(!fd.getCompression());
   size_t target_size = calculateOffset(target_base_width, target_base_height, target_levels, format);
   // cerr << "scaling to " << target_base_width << " " << target_base_height << " " << target_levels << " => " << target_size << " bytes\n";
-  std::unique_ptr<unsigned char[]> output_data(new unsigned char[target_size]);
+  auto output_data = std::make_unique<unsigned char[]>(target_size);
   unsigned short target_width = target_base_width, target_height = target_base_height;
   stbir_resize_uint8(data_.get(), getWidth(), getHeight(), 0, output_data_.get(), target_width, target_height, 0, fd.getBytesPerPixel());
 
@@ -351,6 +351,6 @@ ImageData::scale(unsigned short target_base_width, unsigned short target_base_he
       target_height /= 2;
     }
   }
-  return unique_ptr<ImageData>(new ImageData(output_data_.get(), getInternalFormat(), target_base_width, target_base_height, target_levels));
+  return make_unique<ImageData>(output_data_.get(), getInternalFormat(), target_base_width, target_base_height, target_levels);
 }
 #endif

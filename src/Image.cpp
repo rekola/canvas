@@ -42,7 +42,7 @@ Image::loadFromFile(const std::string & filename) {
   }
   assert(w && h && channels);    
 
-  auto data = std::unique_ptr<ImageData>(new ImageData((unsigned char *)img_buffer, w, h, channels));
+  auto data = std::make_unique<ImageData>((unsigned char *)img_buffer, w, h, channels);
   
   stbi_image_free(img_buffer);
 

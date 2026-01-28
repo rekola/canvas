@@ -70,7 +70,7 @@ ImageData::blur(float hradius, float vradius) const {
   auto r = make_unique<ImageData>(width_, height_, num_channels_);
 
   if (num_channels_ == 4) {
-    unsigned char * tmp = new unsigned char[width_ * height_ * 4];
+    auto tmp = std::make_unique<unsigned char[]>(width_ * height_ * 4);
     if (hradius > 0.0f) {
       vector<int> hkernel = make_kernel(hradius);
       unsigned short hsize = hkernel.size();
@@ -78,7 +78,7 @@ ImageData::blur(float hradius, float vradius) const {
       int htotal = 0;
       for (auto & a : hkernel) htotal += a;
 
-      memset(tmp, 0, width_ * height_ * 4);
+      memset(tmp.get(), 0, width_ * height_ * 4);
       for (unsigned int row = 0; row < height_; row++) {
         for (unsigned int col = 0; col + hsize <= width_; col++) {
           int c0 = 0, c1 = 0, c2 = 0, c3 = 0;
@@ -89,7 +89,7 @@ ImageData::blur(float hradius, float vradius) const {
             c2 += *ptr++ * hkernel[i];
             c3 += *ptr++ * hkernel[i];
           }
-          unsigned char * ptr = tmp + (row * width_ + col + hsize / 2) * 4;
+          unsigned char * ptr = tmp.get() + (row * width_ + col + hsize / 2) * 4;
           *ptr++ = (unsigned char)(c0 / htotal);
           *ptr++ = (unsigned char)(c1 / htotal);
           *ptr++ = (unsigned char)(c2 / htotal);
@@ -97,7 +97,7 @@ ImageData::blur(float hradius, float vradius) const {
         }
       }
     } else {
-      memcpy(tmp, getData(), width_ * height_ * 4);
+      memcpy(tmp.get(), getData(), width_ * height_ * 4);
     }
     if (vradius > 0) {
       vector<int> vkernel = make_kernel(vradius);
@@ -111,7 +111,7 @@ ImageData::blur(float hradius, float vradius) const {
         for (unsigned int row = 0; row + vsize <= height_; row++) {
           int c0 = 0, c1 = 0, c2 = 0, c3 = 0;
           for (unsigned int i = 0; i < vsize; i++) {
-            const unsigned char * ptr = tmp + ((row + i) * width_ + col) * 4;
+            const unsigned char * ptr = tmp.get() + ((row + i) * width_ + col) * 4;
             c0 += *ptr++ * vkernel[i];
             c1 += *ptr++ * vkernel[i];
             c2 += *ptr++ * vkernel[i];
@@ -125,11 +125,10 @@ ImageData::blur(float hradius, float vradius) const {
         }
       }
     } else {
-      memcpy(r->getData(), tmp, width_ * height_ * 4);
+      memcpy(r->getData(), tmp.get(), width_ * height_ * 4);
     }
-    delete[] tmp;
   } else if (num_channels_ == 1) {
-    unsigned char * tmp = new unsigned char[width_ * height_];
+    auto tmp = std::make_unique<unsigned char[]>(width_ * height_);
     if (hradius > 0.0f) {
       vector<int> hkernel = make_kernel(hradius);
       unsigned short hsize = hkernel.size();
@@ -137,7 +136,7 @@ ImageData::blur(float hradius, float vradius) const {
       int htotal = 0;
       for (auto & a : hkernel) htotal += a;
 
-      memset(tmp, 0, width_ * height_);
+      memset(tmp.get(), 0, width_ * height_);
       for (unsigned int row = 0; row < height_; row++) {
         for (unsigned int col = 0; col + hsize <= width_; col++) {
           int c0 = 0;
@@ -145,12 +144,12 @@ ImageData::blur(float hradius, float vradius) const {
             const unsigned char * ptr = getData() + (row * width_ + col + i);
             c0 += *ptr * hkernel[i];
           }
-          unsigned char * ptr = tmp + (row * width_ + col + hsize / 2);
+          unsigned char * ptr = tmp.get() + (row * width_ + col + hsize / 2);
           *ptr = (unsigned char)(c0 / htotal);
         }
       }
     } else {
-      memcpy(tmp, getData(), width_ * height_);
+      memcpy(tmp.get(), getData(), width_ * height_);
     }
     if (vradius > 0) {
       vector<int> vkernel = make_kernel(vradius);
@@ -163,7 +162,7 @@ ImageData::blur(float hradius, float vradius) const {
         for (unsigned int row = 0; row + vsize <= height_; row++) {
           int c0 = 0;
           for (unsigned int i = 0; i < vsize; i++) {
-            const unsigned char * ptr = tmp + ((row + i) * width_ + col);
+            const unsigned char * ptr = tmp.get() + ((row + i) * width_ + col);
             c0 += *ptr * vkernel[i];
           }
           unsigned char * ptr = r->getData() + ((row + vsize / 2) * width_ + col);
@@ -171,9 +170,8 @@ ImageData::blur(float hradius, float vradius) const {
         }
       }
     } else {
-      memcpy(r->getData(), tmp, width_ * height_);
+      memcpy(r->getData(), tmp.get(), width_ * height_);
     }
-    delete[] tmp;
   }
 
   return r;
