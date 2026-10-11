@@ -316,8 +316,8 @@ int main() {
     TestContext ctx(4, 2);
     ctx.fillStyle = "#ff0000";
     ctx.fillRect(0, 0, 2, 2);
-    Style filter(&ctx);
-    filter.setType(Style::FILTER);
+    canvas::Style filter(&ctx);
+    filter.setType(canvas::Style::FILTER);
     ctx.fillStyle = filter;
     ctx.fillRect(2, 0, 2, 2);
     Px p = pixel(ctx, 3, 1);
