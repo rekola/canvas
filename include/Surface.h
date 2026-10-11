@@ -9,9 +9,10 @@
 #include <TextAlign.h>
 #include <TextMetrics.h>
 #include <Operator.h>
-#include <InternalFormat.h>
 #include <ImageData.h>
+#ifdef CANVAS_HAS_TEXTURE_PACKING
 #include <PackedImageData.h>
+#endif
 
 #include <memory>
 #include <cassert>
@@ -58,6 +59,7 @@ namespace canvas {
     virtual void drawImage(const ImageData & _img, const Point & p, double w, double h, float displayScale, float globalAlpha, float shadowBlur, float shadowOffsetX, float shadowOffsetY, const Color & shadowColor, const Path2D & clipPath, bool imageSmoothingEnabled = true) = 0;
     virtual std::unique_ptr<Image> createImage(float display_scale) = 0;
 
+#ifdef CANVAS_HAS_TEXTURE_PACKING
     std::unique_ptr<PackedImageData> createPackedImage() {
       unsigned char * buffer = (unsigned char *)lockMemory(false);
       assert(buffer);
@@ -69,6 +71,7 @@ namespace canvas {
 	return std::make_unique<PackedImageData>(InternalFormat::RGBA8, getActualWidth(), getActualHeight(), 1);
       }
     }
+#endif
 
     std::unique_ptr<ImageData> blur(float hradius, float vradius) {
       ImageData tmp((unsigned char *)lockMemory(false), getActualWidth(), getActualHeight(), getNumChannels());

@@ -2,7 +2,9 @@
 #define _IMAGE_H_
 
 #include <ImageData.h>
+#ifdef CANVAS_HAS_TEXTURE_PACKING
 #include <PackedImageData.h>
+#endif
 
 #include <string>
 
@@ -51,9 +53,11 @@ namespace canvas {
     void setDisplayScale(float f) { display_scale = f; }
     float getDisplayScale() const { return display_scale; }
 
+#ifdef CANVAS_HAS_TEXTURE_PACKING
     std::unique_ptr<PackedImageData> pack(InternalFormat format, int num_levels) const {
       return std::unique_ptr<PackedImageData>(new PackedImageData(format, num_levels, *data));
     }
+#endif
     
     static bool isPNG(const unsigned char * buffer, size_t size);
     static bool isJPEG(const unsigned char * buffer, size_t size);
