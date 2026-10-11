@@ -2,6 +2,7 @@
 #include <Image.h>
 #include <ImageData.h>
 
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 
@@ -102,6 +103,27 @@ int main() {
     const unsigned char png[] = { 0x89, 'P', 'N', 'G' };
     CHECK(Image::isJPEG(jfif, sizeof jfif) && Image::isJPEG(exif, sizeof exif) && Image::isJPEG(dqt, sizeof dqt));
     CHECK(!Image::isJPEG(png, sizeof png) && !Image::isJPEG(dqt, 2));
+  }
+  {  // Colour strings.
+    auto is = [](const std::string & text, float r, float g, float b, float a) {
+      Color c(text);
+      return std::abs(c.red - r) < 0.003f && std::abs(c.green - g) < 0.003f && std::abs(c.blue - b) < 0.003f && std::abs(c.alpha - a) < 0.003f;
+    };
+    CHECK(is("#f00", 1, 0, 0, 1) && is("#ff0000", 1, 0, 0, 1) && is("#FF0000", 1, 0, 0, 1));
+    CHECK(is("#f008", 1, 0, 0, 8 * 17 / 255.0f) && is("#00ff0080", 0, 1, 0, 128 / 255.0f));
+    CHECK(is("rgb(255, 128, 0)", 1, 128 / 255.0f, 0, 1));
+    CHECK(is("rgba(0, 0, 255, 0.5)", 0, 0, 1, 0.5f) && is("rgba(0,0,255,.25)", 0, 0, 1, 0.25f));
+    CHECK(is("rgb(100%, 0%, 50%)", 1, 0, 0.5f, 1) && is("rgba(0 0 0 / 50%)", 0, 0, 0, 0.5f));
+    CHECK(is("rgba(300, -5, 0, 2)", 1, 0, 0, 1));
+    CHECK(is("red", 1, 0, 0, 1) && is("  Tomato ", 1, 99 / 255.0f, 71 / 255.0f, 1));
+    CHECK(is("rebeccapurple", 0x66 / 255.0f, 0x33 / 255.0f, 0x99 / 255.0f, 1) && is("yellowgreen", 0x9a / 255.0f, 0xcd / 255.0f, 0x32 / 255.0f, 1));
+    CHECK(is("white", 1, 1, 1, 1) && is("black", 0, 0, 0, 1) && is("transparent", 0, 0, 0, 0));
+    CHECK(is("ff0000", 1, 0, 0, 1));
+    // Unknown strings are black, and don't assert.
+    CHECK(is("", 0, 0, 0, 1) && is("nonsense", 0, 0, 0, 1) && is("rgba(1,2", 0, 0, 0, 1) && is("#12", 0, 0, 0, 1) && is("#gg0000", 0, 0, 0, 1));
+    Color c;
+    c = std::string("rgba(255, 0, 0, 0.5)");
+    CHECK(c.red == 1.0f && c.alpha == 0.5f);
   }
   return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }
