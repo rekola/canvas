@@ -46,6 +46,7 @@ endif()
 
 if(CANVAS_BACKEND_QUARTZ)
   target_sources(canvas PRIVATE src/ContextQuartz2D.cpp)
+  target_link_libraries(canvas PUBLIC "-framework CoreGraphics" "-framework CoreText" "-framework CoreFoundation" "-framework ImageIO" "-framework QuartzCore")
   target_compile_definitions(canvas PUBLIC CANVAS_HAS_QUARTZ)
 endif()
 

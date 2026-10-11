@@ -1,0 +1,25 @@
+name: macOS
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+
+jobs:
+  # Builds the Quartz 2D backend so it can't drift from Surface.h and
+  # Context.h. Compile-only for the backend: the pixel tests don't have a
+  # Quartz context yet, so this runs the backend-independent ones.
+  build-and-test:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCANVAS_BACKEND_CAIRO=OFF -DCANVAS_BACKEND_QUARTZ=ON
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
