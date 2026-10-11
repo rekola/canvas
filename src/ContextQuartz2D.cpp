@@ -60,15 +60,15 @@ Quartz2DSurface::renderPath(RenderMode mode, const TransformationMatrix & transf
   }
   
   switch (op) {
-  case SOURCE_OVER:
+  case Operator::SOURCE_OVER:
     CGContextSetBlendMode(gc, kCGBlendModeNormal);
     break;
-  case COPY:
+  case Operator::COPY:
     CGContextSetBlendMode(gc, kCGBlendModeCopy);
     break;
   }
   switch (mode) {
-  case STROKE:
+  case RenderMode::STROKE:
     sendPath(path, display_scale);
     CGContextSetRGBStrokeColor(gc, style.color.red,
 			       style.color.green,
@@ -77,7 +77,7 @@ Quartz2DSurface::renderPath(RenderMode mode, const TransformationMatrix & transf
     CGContextSetLineWidth(gc, lineWidth * display_scale);
     CGContextStrokePath(gc);  
     break;
-  case FILL:
+  case RenderMode::FILL:
     if (style.getType() == Style::LINEAR_GRADIENT) {
       const std::map<float, Color> & colors = style.getColors();
       if (!colors.empty()) {
@@ -121,7 +121,7 @@ Quartz2DSurface::renderPath(RenderMode mode, const TransformationMatrix & transf
       CGContextFillPath(gc);
     }
   }
-  if (op != SOURCE_OVER) {
+  if (op != Operator::SOURCE_OVER) {
     CGContextSetBlendMode(gc, kCGBlendModeNormal);
   }
   if (has_shadow || !clipPath.empty()) {

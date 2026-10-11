@@ -35,7 +35,7 @@ namespace canvas {
       bool is_bold = font.weight.isBold();
       bool is_italic = font.style == Font::ITALIC;
       std::string key = font.family + "/" + std::to_string(size) + "/" + (is_bold ? "bold" : "") + "/" + (is_italic ? "italic" : "");
-      auto it = fonts.find(key.str());
+      auto it = fonts.find(key);
       if (it != fonts.end()) {
         return it->second;
       } else {
@@ -49,7 +49,7 @@ namespace canvas {
         } else {
           font2 = CTFontCreateWithName(CFSTR("ArialMT"), size, NULL);
         }
-        fonts[key.str()] = font2;
+        fonts[key] = font2;
         return font2;
       }
     }
@@ -160,20 +160,20 @@ namespace canvas {
       double x = p.x * display_scale;
       double y = p.y * display_scale;
 
-      if (textAlign != ALIGN_LEFT || textBaseline == MIDDLE || textBaseline == TOP) {
+      if (textAlign != TextAlign::LEFT || textBaseline == TextBaseline::MIDDLE || textBaseline == TextBaseline::TOP) {
 	CGFloat ascent, descent, leading;
 	double width = CTLineGetTypographicBounds(line, &ascent, &descent, &leading);
 	
 	switch (textBaseline) {
-	case MIDDLE: y += -descent + (ascent + descent) / 2.0; break;
-	case TOP: y += ascent; break;
+	case TextBaseline::MIDDLE: y += -descent + (ascent + descent) / 2.0; break;
+	case TextBaseline::TOP: y += ascent; break;
 	default: break;
 	}
 	
 	switch (textAlign) {
-        case ALIGN_LEFT: break;
-        case ALIGN_CENTER: x -= width / 2; break;
-        case ALIGN_RIGHT: x -= width; break;
+        case TextAlign::LEFT: break;
+        case TextAlign::CENTER: x -= width / 2; break;
+        case TextAlign::RIGHT: x -= width; break;
         default: break;
 	}
       }
