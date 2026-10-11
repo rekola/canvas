@@ -1,5 +1,5 @@
-#ifndef _ATTRIBUTE_H_
-#define _ATTRIBUTE_H_
+#ifndef _CANVAS_ATTRIBUTE_H_
+#define _CANVAS_ATTRIBUTE_H_
 
 #include <string>
 #include <stdlib.h>

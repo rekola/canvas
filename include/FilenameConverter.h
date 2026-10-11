@@ -1,5 +1,5 @@
-#ifndef _FILENAMECONVERTER_H_
-#define _FILENAMECONVERTER_H_
+#ifndef _CANVAS_FILENAMECONVERTER_H_
+#define _CANVAS_FILENAMECONVERTER_H_
 
 namespace canvas {
   class FilenameConverter {

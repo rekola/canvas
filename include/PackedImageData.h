@@ -1,5 +1,5 @@
-#ifndef _PACKEDIMAGEDATA_H_
-#define _PACKEDIMAGEDATA_H_
+#ifndef _CANVAS_PACKEDIMAGEDATA_H_
+#define _CANVAS_PACKEDIMAGEDATA_H_
 
 #include <InternalFormat.h>
 

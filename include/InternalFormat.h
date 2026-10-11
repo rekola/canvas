@@ -1,5 +1,5 @@
-#ifndef _INTERNALFORMAT_H_
-#define _INTERNALFORMAT_H_
+#ifndef _CANVAS_INTERNALFORMAT_H_
+#define _CANVAS_INTERNALFORMAT_H_
 
 namespace canvas {  
   enum class InternalFormat {

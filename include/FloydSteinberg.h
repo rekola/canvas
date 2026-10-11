@@ -1,5 +1,5 @@
-#ifndef _FLOYDSTEINBERG_H_
-#define _FLOYDSTEINBERG_H_
+#ifndef _CANVAS_FLOYDSTEINBERG_H_
+#define _CANVAS_FLOYDSTEINBERG_H_
 
 #include <InternalFormat.h>
 #include <memory>

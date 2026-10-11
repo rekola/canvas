@@ -1,5 +1,5 @@
-#ifndef _COLOR_H_
-#define _COLOR_H_
+#ifndef _CANVAS_COLOR_H_
+#define _CANVAS_COLOR_H_
 
 #include <string>
 

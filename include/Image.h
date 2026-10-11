@@ -1,5 +1,5 @@
-#ifndef _IMAGE_H_
-#define _IMAGE_H_
+#ifndef _CANVAS_IMAGE_H_
+#define _CANVAS_IMAGE_H_
 
 #include <ImageData.h>
 #ifdef CANVAS_HAS_TEXTURE_PACKING
