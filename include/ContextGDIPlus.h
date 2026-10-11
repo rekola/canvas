@@ -2,6 +2,7 @@
 #define _CANVAS_CONTEXTGDIPLUS_H_
 
 #include "Context.h"
+#include <FilenameConverter.h>
 
 #define NOMINMAX
 #include <algorithm>
@@ -193,7 +194,8 @@ namespace canvas {
 
   class GDIPlusContextFactory : public ContextFactory  {
   public:
-    GDIPlusContextFactory(float display_scale) : ContextFactory(display_scale) {
+    // The converter turns an image name into a path; without one the name is the path.
+    GDIPlusContextFactory(float display_scale, FilenameConverter * _converter = nullptr) : ContextFactory(display_scale), converter(_converter) {
       ContextGDIPlus::initialize();
     }
     std::unique_ptr<Context> createContext(unsigned int width, unsigned int height, unsigned int num_channels = 4) override {
@@ -206,6 +208,9 @@ namespace canvas {
     std::unique_ptr<Image> loadImage(const std::string & filename) override;
     std::unique_ptr<Image> createImage() override;
     std::unique_ptr<Image> createImage(const unsigned char * _data, unsigned int _width, unsigned int _height, unsigned int _num_channels) override;
+
+  private:
+    FilenameConverter * converter;
   };
 };
 

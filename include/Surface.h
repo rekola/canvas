@@ -14,8 +14,9 @@
 #include <PackedImageData.h>
 #endif
 
-#include <memory>
 #include <cassert>
+#include <cstring>
+#include <memory>
 
 namespace canvas {
   class Context;
@@ -74,17 +75,11 @@ namespace canvas {
 #endif
 
     std::unique_ptr<ImageData> blur(float hradius, float vradius) {
-      ImageData tmp((unsigned char *)lockMemory(false), getActualWidth(), getActualHeight(), getNumChannels());
-      auto r = tmp.blur(hradius, vradius);
-      releaseMemory();
-      return r;
+      return readPixels()->blur(hradius, vradius);
     }
     
     std::unique_ptr<ImageData> colorize(const Color & color) {
-      ImageData tmp((unsigned char *)lockMemory(false), getActualWidth(), getActualHeight(), getNumChannels());
-      auto r = tmp.colorize(color);
-      releaseMemory();
-      return r;
+      return readPixels()->colorize(color);
     }
 
     unsigned int getLogicalWidth() const { return logical_width; }
@@ -94,6 +89,28 @@ namespace canvas {
     unsigned int getNumChannels() const { return num_channels; }
     
   protected:
+    // What lockMemory() points at: the bytes between the starts of two
+    // rows (a backend may pad them), and what the bytes are. By default
+    // unpadded and native: premultiplied, BGR order.
+    virtual size_t getMemoryStride() const { return size_t(actual_width) * num_channels; }
+    virtual ChannelOrder getMemoryChannelOrder() const { return ChannelOrder::BGR; }
+    virtual bool isMemoryPremultiplied() const { return true; }
+
+    // A copy of the pixels as an unpadded ImageData with its format set.
+    virtual std::unique_ptr<ImageData> readPixels() {
+      auto r = std::make_unique<ImageData>(actual_width, actual_height, num_channels);
+      r->setFormat(getMemoryChannelOrder(), isMemoryPremultiplied());
+      auto src = (const unsigned char *)lockMemory(false);
+      if (src) {
+	size_t row = r->getBytesPerRow(), stride = getMemoryStride();
+	for (unsigned int y = 0; y < actual_height; y++) {
+	  memcpy(r->getData() + y * row, src + y * stride, row);
+	}
+      }
+      releaseMemory();
+      return r;
+    }
+
     virtual void * lockMemory(bool write_access = false) = 0;
     virtual void releaseMemory() = 0;
 

@@ -85,19 +85,99 @@ int main() {
     CHECK(a.r < b.r && b.r < c.r);
     CHECK(a.r < 40 && c.r > 215);
   }
-  {  // An image drawn onto a context reads back where it was placed.
+  {  // An image drawn onto a context reads back where it was placed. The
+     // ImageData is straight RGBA (the default), so (255, 0, 0, 255) is red.
     ContextCairo ctx(8, 8);
     unsigned char rgba[4 * 2 * 2];
-    for (int i = 0; i < 4; i++) { rgba[4 * i] = 0; rgba[4 * i + 1] = 0; rgba[4 * i + 2] = 255; rgba[4 * i + 3] = 255; }
+    for (int i = 0; i < 4; i++) { rgba[4 * i] = 255; rgba[4 * i + 1] = 0; rgba[4 * i + 2] = 0; rgba[4 * i + 3] = 255; }
     ImageData img(rgba, 2, 2, 4);
     ctx.drawImage(img, 4, 4, 2, 2);
     for (unsigned y = 4; y < 6; y++)
       for (unsigned x = 4; x < 6; x++) {
         Px in = pixel(ctx, x, y);
-        CHECK(in.a == 255 && in.r == 255 && in.g == 0);
+        CHECK(in.a == 255 && in.r == 255 && in.g == 0 && in.b == 0);
       }
     CHECK(pixel(ctx, 3, 4).a == 0 && pixel(ctx, 6, 5).a == 0);
     CHECK(pixel(ctx, 1, 1).a == 0);
+  }
+  {  // Straight alpha is premultiplied on the way in: 50% blue.
+    ContextCairo ctx(2, 2);
+    unsigned char rgba[4] = { 0, 0, 255, 128 };
+    ctx.drawImage(ImageData(rgba, 1, 1, 4), 0, 0, 1, 1);
+    Px p = pixel(ctx, 0, 0);
+    CHECK(near(p.a, 128) && near(p.b, 128) && p.r == 0 && p.g == 0);
+  }
+  {  // The same pixel as premultiplied BGRA (what createImage() hands out) draws the same.
+    ContextCairo ctx(2, 2);
+    unsigned char bgra[4] = { 128, 0, 0, 128 };
+    ImageData img(bgra, 1, 1, 4);
+    img.setFormat(ChannelOrder::BGR, true);
+    ctx.drawImage(img, 0, 0, 1, 1);
+    Px p = pixel(ctx, 0, 0);
+    CHECK(near(p.a, 128) && near(p.b, 128) && p.r == 0 && p.g == 0);
+  }
+  {  // 3 channels follow the channel order too.
+    ContextCairo ctx(2, 1);
+    unsigned char rgb[3] = { 255, 0, 0 };
+    ctx.drawImage(ImageData(rgb, 1, 1, 3), 0, 0, 1, 1);
+    ImageData bgr(rgb, 1, 1, 3);
+    bgr.setFormat(ChannelOrder::BGR, false);
+    ctx.drawImage(bgr, 1, 0, 1, 1);
+    CHECK(pixel(ctx, 0, 0).r == 255 && pixel(ctx, 0, 0).b == 0);
+    CHECK(pixel(ctx, 1, 0).b == 255 && pixel(ctx, 1, 0).r == 0);
+  }
+  {  // One channel is an alpha mask. Its rows are 5 bytes wide and Cairo pads
+     // them to 8; every pixel must survive the round trip.
+    const unsigned w = 5, h = 3;
+    unsigned char mask[w * h];
+    for (unsigned i = 0; i < w * h; i++) mask[i] = (unsigned char)(10 + i * 10);
+    ContextCairo ctx(w, h, 1);
+    ctx.drawImage(ImageData(mask, w, h, 1), 0, 0, w, h);
+    auto img = ctx.getDefaultSurface().createImage(1.0f);
+    const ImageData & d = img->getData();
+    CHECK(d.getNumChannels() == 1 && d.getWidth() == w && d.getHeight() == h);
+    bool same = true;
+    for (unsigned i = 0; i < w * h; i++) if (std::abs(d.getData()[i] - mask[i]) > 1) same = false;
+    CHECK(same);
+  }
+  {  // Pixels read back from a surface say what they are.
+    ContextCairo ctx(2, 2);
+    ctx.fillStyle = "#ff0000";
+    ctx.fillRect(0, 0, 2, 2);
+    auto img = ctx.getDefaultSurface().createImage(1.0f);
+    CHECK(img->getData().getChannelOrder() == ChannelOrder::BGR && img->getData().isPremultiplied());
+  }
+  {  // A shadow of an odd width is not sheared: it is symmetric about the shape.
+    ContextCairo ctx(15, 15);
+    ctx.shadowColor = Color(0.0f, 0.0f, 0.0f, 1.0f);
+    ctx.shadowBlur = 2.0f;
+    ctx.shadowOffsetX = 0.0f;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(6, 6, 3, 3);
+    Px l = pixel(ctx, 5, 7), r = pixel(ctx, 9, 7);
+    CHECK(near(l.a, r.a, 2) && l.a > 20);
+  }
+  {  // loadImage() asks the factory's converter for the path, and the name
+     // may be UTF-8.
+    const char * path = "canvas_test_\xc3\xa4.ppm";
+    FILE * f = std::fopen(path, "wb");
+    CHECK(f != nullptr);
+    if (f) {
+      std::fputs("P6\n1 1\n255\n", f);
+      std::fputc(0, f); std::fputc(255, f); std::fputc(0, f);
+      std::fclose(f);
+      struct Converter : FilenameConverter {
+	bool convert(const std::string & in, std::string & out) override { out = in == "icon" ? "canvas_test_\xc3\xa4.ppm" : in; return true; }
+      } converter;
+      CairoContextFactory factory(1.0f, &converter);
+      auto image = factory.loadImage("icon");
+      const ImageData & d = image->getData();
+      CHECK(d.getWidth() == 1 && d.getNumChannels() == 3 && d.getData()[1] == 255);
+      ContextCairo ctx(1, 1);
+      ctx.drawImage(d, 0, 0, 1, 1);
+      CHECK(pixel(ctx, 0, 0).g == 255 && pixel(ctx, 0, 0).r == 0);
+      std::remove(path);
+    }
   }
   {  // Each gradient is its own: a second one doesn't change the first.
     ContextCairo ctx(16, 2);

@@ -6,6 +6,12 @@
 #include "stb_image.h"
 
 #include <cassert>
+#include <cstdio>
+#include <vector>
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#endif
 
 using namespace std;
 using namespace canvas;
@@ -32,11 +38,30 @@ Image::loadFromMemory(const void * buffer, size_t size) {
   return data;
 }
 
+static FILE * openUtf8(const std::string & filename) {
+#ifdef _WIN32
+  int n = MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1, nullptr, 0);
+  if (n <= 0) return nullptr;
+  std::vector<wchar_t> wide(n);
+  MultiByteToWideChar(CP_UTF8, 0, filename.c_str(), -1, wide.data(), n);
+  return _wfopen(wide.data(), L"rb");
+#else
+  return fopen(filename.c_str(), "rb");
+#endif
+}
+
 std::unique_ptr<ImageData>
 Image::loadFromFile(const std::string & filename) {
   assert(!filename.empty());
   int w, h, channels;
-  auto img_buffer = stbi_load(filename.c_str(), &w, &h, &channels, 0);
+  // The name is UTF-8 on every platform; the Windows C runtime's fopen()
+  // would read it in the ANSI code page.
+  FILE * f = openUtf8(filename);
+  if (!f) {
+    throw ImageLoadingException(("unable to open " + filename).c_str());
+  }
+  auto img_buffer = stbi_load_from_file(f, &w, &h, &channels, 0);
+  fclose(f);
   if (!img_buffer) {
     throw ImageLoadingException(stbi_failure_reason());
   }
@@ -56,29 +81,8 @@ Image::isPNG(const unsigned char * buffer, size_t size) {
 
 bool
 Image::isJPEG(const unsigned char * buffer, size_t size) {
-  if (size >= 4 && buffer[0] == 0xFF && buffer[1] == 0xD8 &&
-      buffer[2] == 0xFF && buffer[3] == 0xDB) {
-    return true;
-  } else if (size >= 12 && buffer[0] == 0xFF && buffer[1] == 0xD8 &&
-	     buffer[2] == 0xFF && buffer[3] == 0xE0 && buffer[4] == 0x00 &&
-	     buffer[5] == 0x10 && buffer[6] == 0x4A && buffer[7] == 0x46 &&
-	     buffer[8] == 0x49 && buffer[9] == 0x46 && buffer[10] == 0x00 &&
-	     buffer[11] == 0x01) {
-    return true;
-  } else if (size >= 4 && buffer[0] == 0xFF && buffer[1] == 0xD8 &&
-	     buffer[2] == 0xFF && buffer[3] == 0xEE) {
-    return true;
-  } else if (size >= 12 && buffer[0] == 0xFF && buffer[1] == 0xD8 &&
-	     buffer[2] == 0xFF && buffer[3] == 0xE1 && buffer[6] == 0x45 &&
-	     buffer[7] == 0x78 && buffer[8] == 0x69 && buffer[9] == 0x66 &&
-	     buffer[10] == 0x00 && buffer[11] == 0x00) {
-    return true;
-  } else if (size >= 4 && buffer[0] == 0xFF && buffer[1] == 0xD8 &&
-	     buffer[2] == 0xFF && buffer[3] == 0xE0) {
-    return true;
-  } else {
-    return false;
-  }      
+  // SOI followed by any marker: JFIF (E0), Exif (E1), Adobe (EE), plain (DB).
+  return size >= 3 && buffer[0] == 0xFF && buffer[1] == 0xD8 && buffer[2] == 0xFF;
 }
 
 bool

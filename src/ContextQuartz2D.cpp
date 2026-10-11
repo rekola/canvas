@@ -251,8 +251,8 @@ public:
     CFRelease(mainBundle);
     CFRelease(filename2);
 #else
-    string path;
-    converter->convert(filename, path);
+    string path = filename;
+    if (converter && !converter->convert(filename, path)) path = filename;
 #endif
     data = loadFromFile(path);
     if (!data.get()) filename.clear();

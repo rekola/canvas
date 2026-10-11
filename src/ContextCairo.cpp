@@ -18,31 +18,36 @@ static cairo_format_t getCairoFormat(unsigned int num_channels) {
   }
 }
 
-static pair<cairo_surface_t *, unsigned int *> initializeSurfaceFromData(unsigned int width, unsigned int height, unsigned int num_channels, const unsigned char * data, bool flip_channels) {
+// The surface's pixels are Cairo's: premultiplied 0xAARRGGBB words (A8 for
+// one channel, with rows padded to Cairo's stride). The image is converted
+// from whatever format it says it is in.
+static pair<cairo_surface_t *, unsigned int *> initializeSurfaceFromData(const ImageData & image) {
+  unsigned int width = image.getWidth(), height = image.getHeight(), num_channels = image.getNumChannels();
   cairo_format_t format = getCairoFormat(num_channels);
   unsigned int stride = cairo_format_stride_for_width(format, width);
-  size_t numPixels = width * height;
-  unsigned int * storage;
+  const unsigned char * data = image.getData();
+  size_t numPixels = size_t(width) * height;
+  unsigned int * storage = new unsigned int[(size_t(stride) * height + 3) / 4]();
   if (num_channels == 1) {
-    storage = new unsigned int[(numPixels + 3) / 4];
-    memcpy(storage, data, numPixels);  
+    for (unsigned int y = 0; y < height; y++) {
+      memcpy((unsigned char *)storage + size_t(y) * stride, data + size_t(y) * width, width);
+    }
   } else {
-    storage = new unsigned int[numPixels];
     assert(stride == 4 * width);
-    if (num_channels == 4) {
-      if (flip_channels) {
-	for (unsigned int i = 0; i < numPixels; i++) {
-	  storage[i] = (data[4 * i + 2]) | (data[4 * i + 1] << 8) | (data[4 * i + 0] << 16) | (data[4 * i + 3] << 24);
+    bool bgr = image.getChannelOrder() == ChannelOrder::BGR;
+    bool premultiplied = image.isPremultiplied();
+    for (size_t i = 0; i < numPixels; i++) {
+      const unsigned char * p = data + num_channels * i;
+      unsigned int r = bgr ? p[2] : p[0], g = p[1], b = bgr ? p[0] : p[2], a = 255;
+      if (num_channels == 4) {
+	a = p[3];
+	if (!premultiplied) {
+	  r = (r * a + 127) / 255;
+	  g = (g * a + 127) / 255;
+	  b = (b * a + 127) / 255;
 	}
-      } else {
-	memcpy(storage, data, numPixels * 4);
       }
-    } else if (num_channels == 3) {
-      for (unsigned int i = 0; i < numPixels; i++) {
-	storage[i] = data[3 * i + 2] + (data[3 * i + 1] << 8) + (data[3 * i + 0] << 16);
-      }
-    } else {
-      assert(0);
+      storage[i] = b | (g << 8) | (r << 16) | (a << 24);
     }
   }
   auto surface = cairo_image_surface_create_for_data((unsigned char*)storage,
@@ -67,7 +72,7 @@ CairoSurface::CairoSurface(unsigned int _logical_width, unsigned int _logical_he
 CairoSurface::CairoSurface(const ImageData & image)
   : Surface(image.getWidth(), image.getHeight(), image.getWidth(), image.getHeight(), image.getNumChannels())
 {
-  auto p = initializeSurfaceFromData(image.getWidth(), image.getHeight(), image.getNumChannels(), image.getData(), false);
+  auto p = initializeSurfaceFromData(image);
   surface = p.first;
   storage = p.second;
 }
@@ -347,21 +352,30 @@ CairoSurface::drawImage(const ImageData & _img, const Point & p, double w, doubl
 
 class CairoImage : public Image {
 public:
+  void setConverter(FilenameConverter * _converter) { converter = _converter; }
+
   CairoImage(float _display_scale) : Image(_display_scale) { }
   CairoImage(const std::string & filename, float _display_scale) : Image(filename, _display_scale) { }
   CairoImage(const unsigned char * _data, unsigned int _width, unsigned int _height, unsigned int _num_channels, float _display_scale) : Image(_data, _width, _height, _num_channels, _display_scale) { }
   
 protected:
   void loadFile() override {
-    data = loadFromFile("assets/" + filename);
+    std::string path = filename;
+    if (converter && !converter->convert(filename, path)) path = filename;
+    data = loadFromFile(path);
     if (!data.get()) filename.clear();
   }
+
+private:
+  FilenameConverter * converter = nullptr;
 };
 
 
 std::unique_ptr<Image>
 CairoContextFactory::loadImage(const std::string & filename) {
-  return std::make_unique<CairoImage>(filename, getDisplayScale());
+  auto image = std::make_unique<CairoImage>(filename, getDisplayScale());
+  image->setConverter(converter);
+  return image;
 }
 
 std::unique_ptr<Image>
@@ -374,13 +388,29 @@ CairoContextFactory::createImage(const unsigned char * _data, unsigned int _widt
   return std::make_unique<CairoImage>(_data, _width, _height, _num_channels, getDisplayScale());
 }
 
+// Cairo's RGB24 is a padded 32-bit word per pixel; ImageData's 3 channels are not.
+std::unique_ptr<ImageData>
+CairoSurface::readPixels() {
+  if (getNumChannels() != 3) return Surface::readPixels();
+  unsigned int w = getActualWidth(), h = getActualHeight();
+  auto r = std::make_unique<ImageData>(w, h, 3);
+  r->setFormat(ChannelOrder::BGR, false);
+  auto src = (const unsigned char *)lockMemory(false);
+  if (src) {
+    size_t stride = getMemoryStride();
+    for (unsigned int y = 0; y < h; y++) {
+      for (unsigned int x = 0; x < w; x++) {
+	memcpy(r->getData() + (size_t(y) * w + x) * 3, src + y * stride + 4 * x, 3);
+      }
+    }
+  }
+  releaseMemory();
+  return r;
+}
+
 std::unique_ptr<Image>
 CairoSurface::createImage(float display_scale) {
-  auto buffer = (unsigned char *)lockMemory(false);
-  assert(buffer);
-
-  auto image = std::make_unique<CairoImage>(buffer, getActualWidth(), getActualHeight(), getNumChannels(), display_scale);
-  releaseMemory();
-  
+  auto image = std::make_unique<CairoImage>(display_scale);
+  image->getDataPtr() = readPixels();
   return image;
 }
