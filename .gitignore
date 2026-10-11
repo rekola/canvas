@@ -26,3 +26,4 @@
 # Emacs backup copy
 *~
 /.vs
+build/

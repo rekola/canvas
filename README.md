@@ -23,6 +23,38 @@ Example
     context->strokeStyle = "#ff0000";
     context->stroke();
 
+Build
+=====
+
+    cmake -B build && cmake --build build && ctest --test-dir build
+
+One option per backend: `CANVAS_BACKEND_CAIRO` (default on), `CANVAS_BACKEND_GDIPLUS`,
+`CANVAS_BACKEND_QUARTZ`, `CANVAS_BACKEND_ANDROID` (default off). The target is
+`canvas::canvas`, installable and exported. `PerlinSurface` no longer compiles
+and is not part of the build.
+
+Pixel format
+============
+
+`ImageData` is a plain byte array, `width * height * channels`, rows top to
+bottom with no padding. What the bytes mean depends on where it came from:
+
+* Read back from a Cairo surface (`Surface::createImage()`): the surface's
+  own memory, 4 channels, **premultiplied** alpha, one 32-bit native-endian
+  word per pixel as `0xAARRGGBB`. On little-endian machines the bytes in
+  memory are therefore **B, G, R, A**.
+* Loaded from a file (`Image::loadFromFile()`): the file's channels in
+  order (R, G, B[, A]) with **straight** alpha. `ImageData::multiplyAlpha()`
+  converts straight RGBA to premultiplied.
+
+Geometry
+========
+
+As in HTML5 canvas, integer coordinates are pixel edges and pixel centres are
+at .5. A 1 px line on an integer coordinate is antialiased over two rows; put
+it on a .5 coordinate to get one crisp row. Fills with integer edges, and
+images drawn at integer positions and native size, are exact.
+
 Linux
 =====
 
