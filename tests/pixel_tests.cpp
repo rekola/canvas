@@ -1,5 +1,5 @@
 // Pixel tests for what a client draws, run on whichever backend the build
-// has (Cairo, else GDI+). The surface's memory is read back through
+// has (Cairo, GDI+ or Quartz). The surface's memory is read back through
 // Surface::createImage().
 #if defined(CANVAS_HAS_CAIRO)
 #include <ContextCairo.h>
@@ -7,8 +7,19 @@ namespace canvas { typedef ContextCairo TestContext; typedef CairoContextFactory
 #elif defined(CANVAS_HAS_GDIPLUS)
 #include <ContextGDIPlus.h>
 namespace canvas { typedef ContextGDIPlus TestContext; typedef GDIPlusContextFactory TestFactory; }
+#elif defined(CANVAS_HAS_QUARTZ)
+#include <ContextQuartz2D.h>
+namespace canvas {
+  // The Quartz context takes a shared cache; the tests don't care.
+  class TestContext : public ContextQuartz2D {
+  public:
+    TestContext(unsigned int w, unsigned int h, unsigned int channels = 4)
+      : ContextQuartz2D(std::make_shared<Quartz2DCache>(), w, h, channels, 1.0f) { }
+  };
+  typedef Quartz2DContextFactory TestFactory;
+}
 #else
-#error "pixel tests need the Cairo or the GDI+ backend"
+#error "pixel tests need the Cairo, GDI+ or Quartz backend"
 #endif
 
 #include <cstdio>

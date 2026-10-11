@@ -7,26 +7,63 @@
 using namespace canvas;
 using namespace std;
 
+// Pixels as B, G, R, A premultiplied (Quartz's kCGImageAlphaPremultipliedFirst
+// with kCGBitmapByteOrder32Little), whatever format the image is in. One
+// channel is an alpha mask and stays one channel.
+static std::unique_ptr<unsigned char[]> toNativePixels(const ImageData & image) {
+  size_t n = size_t(image.getWidth()) * image.getHeight();
+  unsigned int channels = image.getNumChannels();
+  if (channels == 1) {
+    auto out = std::make_unique<unsigned char[]>(n);
+    memcpy(out.get(), image.getData(), n);
+    return out;
+  }
+  auto out = std::make_unique<unsigned char[]>(4 * n);
+  bool bgr = image.getChannelOrder() == ChannelOrder::BGR;
+  bool premultiplied = image.isPremultiplied();
+  for (size_t i = 0; i < n; i++) {
+    const unsigned char * p = image.getData() + channels * i;
+    unsigned int r = bgr ? p[2] : p[0], g = p[1], b = bgr ? p[0] : p[2], a = 255;
+    if (channels == 4) {
+      a = p[3];
+      if (!premultiplied) {
+	r = (r * a + 127) / 255;
+	g = (g * a + 127) / 255;
+	b = (b * a + 127) / 255;
+      }
+    }
+    out[4 * i + 0] = (unsigned char)b;
+    out[4 * i + 1] = (unsigned char)g;
+    out[4 * i + 2] = (unsigned char)r;
+    out[4 * i + 3] = (unsigned char)a;
+  }
+  return out;
+}
+
 Quartz2DSurface::Quartz2DSurface(const std::shared_ptr<Quartz2DCache> & _cache, const ImageData & image)
   : Surface(image.getWidth(), image.getHeight(), image.getWidth(), image.getHeight(), image.getNumChannels()), cache(_cache) {
   assert(getActualWidth() && getActualHeight());
-  size_t bitmapByteCount;
-  if (getNumChannels() == 1) {
-    bitmapByteCount = getActualWidth() * getActualHeight();
-  } else {
-    bitmapByteCount = 4 * getActualWidth() * getActualHeight();
-  }
+  size_t bitmapByteCount = (getNumChannels() == 1 ? 1 : 4) * size_t(getActualWidth()) * getActualHeight();
   bitmapData = new unsigned char[bitmapByteCount];
-  if (image.getNumChannels() == 1 || image.getNumChannels() == 4) {
-    memcpy(bitmapData, image.getData(), bitmapByteCount);
-  } else {
-    for (unsigned int i = 0; i < getActualWidth() * getActualHeight(); i++) {
-      bitmapData[4 * i + 0] = image.getData()[3 * i + 2];
-      bitmapData[4 * i + 1] = image.getData()[3 * i + 1];
-      bitmapData[4 * i + 2] = image.getData()[3 * i + 0];
-      bitmapData[4 * i + 3] = 255;
+  memcpy(bitmapData, toNativePixels(image).get(), bitmapByteCount);
+}
+
+// Three channels are stored as 32-bit pixels; ImageData's are not.
+std::unique_ptr<ImageData>
+Quartz2DSurface::readPixels() {
+  unsigned int w = getActualWidth(), h = getActualHeight(), channels = getNumChannels();
+  auto r = std::make_unique<ImageData>(w, h, channels);
+  r->setFormat(ChannelOrder::BGR, channels == 4);
+  auto src = (const unsigned char *)lockMemory(false);
+  if (src) {
+    if (channels == 3) {
+      for (size_t i = 0; i < size_t(w) * h; i++) memcpy(r->getData() + 3 * i, src + 4 * i, 3);
+    } else {
+      memcpy(r->getData(), src, r->calculateSize());
     }
   }
+  releaseMemory();
+  return r;
 }
 
 void
@@ -35,9 +72,9 @@ Quartz2DSurface::sendPath(const Path2D & path, float scale) {
   CGContextBeginPath(gc);
   for (auto pc : path.getData()) {
     switch (pc.type) {
-    case PathComponent::MOVE_TO: CGContextMoveToPoint(gc, pc.x0 * scale + 0.5, pc.y0 * scale + 0.5); break;
-    case PathComponent::LINE_TO: CGContextAddLineToPoint(gc, pc.x0 * scale + 0.5, pc.y0 * scale + 0.5); break;
-    case PathComponent::ARC: CGContextAddArc(gc, pc.x0 * scale + 0.5, pc.y0 * scale + 0.5, pc.radius * scale, pc.sa, pc.ea, pc.anticlockwise); break;
+    case PathComponent::MOVE_TO: CGContextMoveToPoint(gc, pc.x0 * scale, pc.y0 * scale); break;
+    case PathComponent::LINE_TO: CGContextAddLineToPoint(gc, pc.x0 * scale, pc.y0 * scale); break;
+    case PathComponent::ARC: CGContextAddArc(gc, pc.x0 * scale, pc.y0 * scale, pc.radius * scale, pc.sa, pc.ea, pc.anticlockwise); break;
     case PathComponent::CLOSE: CGContextClosePath(gc); break;
     }
   }
@@ -150,25 +187,20 @@ Quartz2DSurface::resize(unsigned int _logical_width, unsigned int _logical_heigh
 
 void
 Quartz2DSurface::drawImage(const ImageData & input, const Point & p, double w, double h, float displayScale, float globalAlpha, float shadowBlur, float shadowOffsetX, float shadowOffsetY, const Color & shadowColor, const Path2D & clipPath, bool imageSmoothingEnabled) {
-  CGBitmapInfo bitmapInfo = 0;
-  CGColorSpaceRef colorspace = 0;
-  if (input.getNumChannels() == 4) {
-    bitmapInfo |= kCGImageAlphaPremultipliedFirst;
-    bitmapInfo |= kCGBitmapByteOrder32Little;
-    colorspace = cache->getColorSpace();
-  } else if (input.getNumChannels() == 3) {
-    bitmapInfo |= kCGImageAlphaNoneSkipFirst;
-    bitmapInfo |= kCGBitmapByteOrder32Little;
-    colorspace = cache->getColorSpace();
-  } else if (input.getNumChannels() == 2) {
-    bitmapInfo |= kCGImageAlphaPremultipliedFirst;    
-  } else if (input.getNumChannels() == 1) {
-    bitmapInfo |= kCGImageAlphaNone;
-    colorspace = cache->getColorSpaceGray();
-  } else {
-    return;
+  if (input.getNumChannels() < 1 || input.getNumChannels() > 4 || input.getNumChannels() == 2) return;
+  // Always drawn from native B, G, R, A premultiplied pixels (a mask is black with that alpha).
+  std::unique_ptr<unsigned char[]> native = toNativePixels(input);
+  size_t bytes_per_row = 4 * size_t(input.getWidth());
+  std::unique_ptr<unsigned char[]> with_color;
+  if (input.getNumChannels() == 1) {
+    size_t n = size_t(input.getWidth()) * input.getHeight();
+    with_color = std::make_unique<unsigned char[]>(4 * n);
+    for (size_t i = 0; i < n; i++) with_color[4 * i + 3] = native[i];
+    native = std::move(with_color);
   }
-    
+  CGBitmapInfo bitmapInfo = kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little;
+  CGColorSpaceRef colorspace = cache->getColorSpace();
+
   initializeContext();
   
   bool has_shadow = shadowBlur > 0.0f || shadowOffsetX != 0.0f || shadowOffsetY != 0.0f;
@@ -183,14 +215,15 @@ Quartz2DSurface::drawImage(const ImageData & input, const Point & p, double w, d
     setShadow(shadowOffsetX, shadowOffsetY, shadowBlur, shadowColor, displayScale);
   }
   int bitsPerComponent = 8;
-  int bitsPerPixel = input.getNumChannels() * bitsPerComponent;
-  auto cfdata = CFDataCreate(0, input.getData(), input.getHeight() * input.getBytesPerRow());
+  int bitsPerPixel = 32;
+  auto cfdata = CFDataCreate(0, native.get(), input.getHeight() * bytes_per_row);
   auto provider = CGDataProviderCreateWithCFData(cfdata);
-  auto img = CGImageCreate(input.getWidth(), input.getHeight(), bitsPerComponent, bitsPerPixel, input.getBytesPerRow(), colorspace, bitmapInfo, provider, 0, imageSmoothingEnabled, kCGRenderingIntentDefault);
+  auto img = CGImageCreate(input.getWidth(), input.getHeight(), bitsPerComponent, bitsPerPixel, bytes_per_row, colorspace, bitmapInfo, provider, 0, imageSmoothingEnabled, kCGRenderingIntentDefault);
   if (img) {
+    CGContextSetInterpolationQuality(gc, imageSmoothingEnabled ? kCGInterpolationHigh : kCGInterpolationNone);
     flipY();
     if (globalAlpha < 1.0f) CGContextSetAlpha(gc, globalAlpha);
-    CGContextDrawImage(gc, CGRectMake(displayScale * p.x, getActualHeight() - 1 - displayScale * (p.y + h), displayScale * w, displayScale * h), img);
+    CGContextDrawImage(gc, CGRectMake(displayScale * p.x, getActualHeight() - displayScale * (p.y + h), displayScale * w, displayScale * h), img);
     if (globalAlpha < 1.0f) CGContextSetAlpha(gc, 1.0f);
     flipY();
   
@@ -279,11 +312,7 @@ Quartz2DContextFactory::createImage(const unsigned char * _data, unsigned int _w
 
 std::unique_ptr<Image>
 Quartz2DSurface::createImage(float display_scale) {
-  unsigned char * buffer = (unsigned char *)lockMemory(false);
-  assert(buffer);
-
-  auto image = std::unique_ptr<Image>(new Quartz2DImage(0, buffer, getActualWidth(), getActualHeight(), getNumChannels(), display_scale));
-  releaseMemory();
-  
+  auto image = std::unique_ptr<Image>(new Quartz2DImage(0, display_scale));
+  image->getDataPtr() = readPixels();
   return image;
 }

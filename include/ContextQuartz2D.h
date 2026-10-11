@@ -105,7 +105,11 @@ namespace canvas {
       delete[] bitmapData;
     }
 
-    void * lockMemory(bool write_access = false) override { return bitmapData; }
+    void * lockMemory(bool write_access = false) override {
+      // Drawing is lazy; make sure it has happened before anyone reads.
+      if (gc) CGContextFlush(gc);
+      return bitmapData;
+    }
     
     void releaseMemory() override { }
 
@@ -262,6 +266,7 @@ namespace canvas {
     CGContextRef getContext() { return gc; }
  
   protected:
+    std::unique_ptr<ImageData> readPixels() override;
     void sendPath(const Path2D & path, float display_scale);
     CGColorRef createCGColor(const Color & color, float globalAlpha = 1.0f) {
       CGFloat cv[] = { color.red, color.green, color.blue, color.alpha * globalAlpha};
@@ -285,19 +290,23 @@ namespace canvas {
       if (!gc && bitmapData) {
 	unsigned int bitmapBytesPerRow;
 	CGBitmapInfo bitmapInfo = 0;
+	// The memory is B, G, R, A (premultiplied) like the other backends;
+	// one channel is an alpha mask.
+	CGColorSpaceRef space = cache->getColorSpace();
 	if (getNumChannels() == 1) {
 	  bitmapBytesPerRow = getActualWidth();
-	  bitmapInfo |= kCGImageAlphaNone;
+	  bitmapInfo |= kCGImageAlphaOnly;
+	  space = 0;
 	} else if (getNumChannels() == 3) {
 	  bitmapBytesPerRow = getActualWidth() * 4;
-	  bitmapInfo |= kCGImageAlphaNoneSkipLast;
+	  bitmapInfo |= kCGImageAlphaNoneSkipFirst | kCGBitmapByteOrder32Little;
 	} else if (getNumChannels() == 4) {
 	  bitmapBytesPerRow = getActualWidth() * 4;
-	  bitmapInfo |= kCGImageAlphaPremultipliedLast;
+	  bitmapInfo |= kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little;
 	} else {
 	  return;
 	}
-        gc = CGBitmapContextCreate(bitmapData, getActualWidth(), getActualHeight(), 8, bitmapBytesPerRow, cache->getColorSpace(), bitmapInfo);
+        gc = CGBitmapContextCreate(bitmapData, getActualWidth(), getActualHeight(), 8, bitmapBytesPerRow, space, bitmapInfo);
         CGContextSetInterpolationQuality(gc, kCGInterpolationHigh);
         CGContextSetShouldAntialias(gc, true);
 	flipY();
