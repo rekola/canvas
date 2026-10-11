@@ -380,15 +380,21 @@ GDIPlusSurface::measureText(const Font & font, const std::string & text, TextBas
 
 class GDIPlusImage : public Image {
 public:
+  void setConverter(FilenameConverter * _converter) { converter = _converter; }
   GDIPlusImage(float _display_scale) : Image(_display_scale) { }
   GDIPlusImage(const std::string & filename, float _display_scale) : Image(filename, _display_scale) { }
   GDIPlusImage(const unsigned char * _data, unsigned int _width, unsigned int _height, unsigned int _num_channels, float _display_scale) : Image(_data, _width, _height, _num_channels, _display_scale) { }
   
 protected:
   void loadFile() override {
-    data = loadFromFile("assets/" + filename);
+    std::string path = filename;
+    if (converter && !converter->convert(filename, path)) path = filename;
+    data = loadFromFile(path);
     if (!data.get()) filename.clear();
   }
+
+private:
+  FilenameConverter * converter = nullptr;
 };
 
 std::unique_ptr<Image>
@@ -409,7 +415,9 @@ GDIPlusContextFactory::createImage() {
 
 std::unique_ptr<Image>
 GDIPlusContextFactory::loadImage(const std::string & filename) {
-  return std::make_unique<GDIPlusImage>(filename, getDisplayScale());
+  auto image = std::make_unique<GDIPlusImage>(filename, getDisplayScale());
+  image->setConverter(converter);
+  return image;
 }
 
 std::unique_ptr<Image>

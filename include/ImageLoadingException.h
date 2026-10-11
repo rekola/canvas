@@ -2,6 +2,7 @@
 #define _CANVAS_IMAGELOADINGEXCEPTION_H_
 
 #include <exception>
+#include <string>
 
 namespace canvas {
   class ImageLoadingException : public std::exception {

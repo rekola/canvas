@@ -3,6 +3,7 @@
 #define _CANVAS_CONTEXTCAIRO_H_
 
 #include "Context.h"
+#include <FilenameConverter.h>
 
 #include <cairo/cairo.h>
 
@@ -32,6 +33,9 @@ namespace canvas {
     cairo_surface_t * getCairoSurface() { return surface; }
     
   protected:
+    size_t getMemoryStride() const override { return surface ? cairo_image_surface_get_stride(surface) : 0; }
+    std::unique_ptr<ImageData> readPixels() override;
+
     void flush();
     void markDirty();
 
@@ -92,7 +96,8 @@ namespace canvas {
 
   class CairoContextFactory : public ContextFactory {
   public:
-    CairoContextFactory(float display_scale) : ContextFactory(display_scale) { }
+    // The converter turns an image name into a path; without one the name is the path.
+    CairoContextFactory(float display_scale, FilenameConverter * _converter = nullptr) : ContextFactory(display_scale), converter(_converter) { }
     std::unique_ptr<Context> createContext(unsigned int width, unsigned int height, unsigned int num_channels) override {
       return std::unique_ptr<Context>(new ContextCairo(width, height, num_channels, getDisplayScale()));
     }
@@ -103,6 +108,9 @@ namespace canvas {
     std::unique_ptr<Image> loadImage(const std::string & filename) override;
     std::unique_ptr<Image> createImage() override;
     std::unique_ptr<Image> createImage(const unsigned char * _data, unsigned int _width, unsigned int _height, unsigned int _num_channels) override;
+
+  private:
+    FilenameConverter * converter;
   };
 };
 

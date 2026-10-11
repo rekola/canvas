@@ -48,15 +48,31 @@ Pixel format
 ============
 
 `ImageData` is a plain byte array, `width * height * channels`, rows top to
-bottom with no padding. What the bytes mean depends on where it came from:
+bottom with no padding, and says what the bytes are:
+`getChannelOrder()` (`RGB` or `BGR`; alpha is last) and `isPremultiplied()`.
+`convertTo()` changes the bytes to another format, `setFormat()` only relabels
+them. An `ImageData` is straight RGBA unless set otherwise:
 
+* Loaded from a file (`Image::loadFromFile()`): the file's channels in order
+  (R, G, B[, A]) with **straight** alpha. `ImageData::multiplyAlpha()`
+  converts straight RGBA to premultiplied.
 * Read back from a Cairo surface (`Surface::createImage()`): the surface's
   own memory, 4 channels, **premultiplied** alpha, one 32-bit native-endian
   word per pixel as `0xAARRGGBB`. On little-endian machines the bytes in
-  memory are therefore **B, G, R, A**.
-* Loaded from a file (`Image::loadFromFile()`): the file's channels in
-  order (R, G, B[, A]) with **straight** alpha. `ImageData::multiplyAlpha()`
-  converts straight RGBA to premultiplied.
+  memory are therefore **B, G, R, A**, and the image is marked `BGR`,
+  premultiplied. Rows are copied without Cairo's padding.
+* One channel is an alpha mask (what shadows use), whatever its source.
+
+`drawImage()` converts from the image's format, so a loaded PNG with alpha
+draws correctly.
+
+Image names
+===========
+
+`ContextFactory::loadImage(name)` loads `name` as given. Pass the factory a
+`FilenameConverter` to map names to paths (an install directory, an app
+bundle's resources); the Cairo, GDI+ and Quartz factories take one. Paths are
+UTF-8 on every platform.
 
 Geometry
 ========

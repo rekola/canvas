@@ -1,5 +1,7 @@
 #include <ImageData.h>
 
+#include <algorithm>
+#include <cmath>
 #include <vector>
 #include <cassert>
 
@@ -17,7 +19,9 @@ ImageData::scale(unsigned int target_width, unsigned int target_height) const {
 
   stbir_resize_uint8(data_.get(), getWidth(), getHeight(), 0, output_data.get(), target_width, target_height, 0, num_channels_);
 
-  return make_unique<ImageData>(output_data.get(), target_width, target_height, num_channels_);
+  auto r = make_unique<ImageData>(output_data.get(), target_width, target_height, num_channels_);
+  r->setFormat(order_, premultiplied_);
+  return r;
 }
 
 std::unique_ptr<ImageData>
@@ -29,10 +33,12 @@ ImageData::colorize(const Color & color) const {
   int blue = int(255 * color.blue * color.alpha);
   int alpha = int(255 * color.alpha);
 
+  // Premultiplied, with red first.
   auto r = make_unique<ImageData>(width_, height_, 4);
+  r->setFormat(ChannelOrder::RGB, true);
 
   unsigned char * target_buffer = r->getData();
-  for (unsigned int i = 0; i < width_ * height_; i++) {
+  for (size_t i = 0; i < size_t(width_) * height_; i++) {
     unsigned char v = data_[i];
     target_buffer[4 * i + 0] = (unsigned char)(red * v / 255);
     target_buffer[4 * i + 1] = (unsigned char)(green * v / 255);
@@ -61,7 +67,7 @@ static vector<int> make_kernel(float radius) {
 // transparent (zero) and the weights are not renormalized, so a shape
 // near the edge fades out instead of keeping its brightness. The data may
 // be premultiplied: a linear filter commutes with premultiplication.
-static void blur_line(const unsigned char * src, unsigned char * dst, unsigned int count, unsigned int stride, unsigned int channels, const vector<int> & kernel) {
+static void blur_line(const unsigned char * src, unsigned char * dst, unsigned int count, size_t stride, unsigned int channels, const vector<int> & kernel) {
   int r = int(kernel.size() / 2);
   int total = 0;
   for (auto w : kernel) total += w;
@@ -80,6 +86,7 @@ static void blur_line(const unsigned char * src, unsigned char * dst, unsigned i
 std::unique_ptr<ImageData>
 ImageData::blur(float hradius, float vradius) const {
   auto r = make_unique<ImageData>(width_, height_, num_channels_);
+  r->setFormat(order_, premultiplied_);
   if (!isValid()) return r;
 
   unsigned int ch = num_channels_;
@@ -88,7 +95,7 @@ ImageData::blur(float hradius, float vradius) const {
   if (hradius > 0.0f) {
     auto kernel = make_kernel(hradius);
     for (unsigned int row = 0; row < height_; row++) {
-      blur_line(getData() + row * width_ * ch, tmp.get() + row * width_ * ch, width_, ch, ch, kernel);
+      blur_line(getData() + size_t(row) * width_ * ch, tmp.get() + size_t(row) * width_ * ch, width_, ch, ch, kernel);
     }
   } else {
     memcpy(tmp.get(), getData(), size);
@@ -106,15 +113,27 @@ ImageData::blur(float hradius, float vradius) const {
 
 void
 ImageData::multiplyAlpha() {
-  for (size_t i = 0; i < width_ * height_; i++) {
-    unsigned int red = data_[4 * i + 0];
-    unsigned int green = data_[4 * i + 1];
-    unsigned int blue = data_[4 * i + 2];
-    unsigned int alpha = data_[4 * i + 3];
-
-    data_[4 * i + 0] = alpha * red / 255;
-    data_[4 * i + 1] = alpha * green / 255;
-    data_[4 * i + 2] = alpha * blue / 255;    
-  }
+  if (num_channels_ != 4 || premultiplied_) return;
+  convertTo(order_, true);
 }
-    
+
+void
+ImageData::convertTo(ChannelOrder order, bool premultiplied) {
+  if (num_channels_ != 3 && num_channels_ != 4) return;
+  bool swap = order != order_;
+  bool change_alpha = num_channels_ == 4 && premultiplied != premultiplied_;
+  size_t n = size_t(width_) * height_;
+  unsigned char * p = data_.get();
+  for (size_t i = 0; i < n; i++, p += num_channels_) {
+    if (change_alpha) {
+      unsigned int a = p[3];
+      for (int c = 0; c < 3; c++) {
+	if (premultiplied) p[c] = (unsigned char)((p[c] * a + 127) / 255);
+	else p[c] = a ? (unsigned char)std::min(255u, (p[c] * 255u + a / 2) / a) : 0;
+      }
+    }
+    if (swap) std::swap(p[0], p[2]);
+  }
+  order_ = order;
+  if (num_channels_ == 4) premultiplied_ = premultiplied;
+}

@@ -44,11 +44,14 @@ without a backend. Add a pixel test with every behaviour change.
   antialiased over two rows; on a .5 coordinate it is one crisp row (odd
   line widths want .5, even ones integers). A backend must not add its own
   offsets. Fills and images at integer positions are exact.
-- **Pixel format.** `ImageData` is bytes, rows top to bottom, no padding.
-  Read back from Cairo it is premultiplied `0xAARRGGBB` (bytes B,G,R,A on
-  little-endian); loaded from a file it is straight RGBA. State the format
-  whenever an API hands out pixels: clients (the terminal's Sixel and Kitty
-  output, the sub-cell quantizer) read it directly.
+- **Pixel format.** `ImageData` is bytes, rows top to bottom, no padding,
+  and carries its format (`getChannelOrder()`, `isPremultiplied()`).
+  Default is straight RGB(A), as decoded from a file. Read back from Cairo
+  (`createImage()`) it is premultiplied `0xAARRGGBB` (bytes B,G,R,A on
+  little-endian), marked BGR + premultiplied. One channel is an alpha mask.
+  `drawImage` converts. State the format whenever an API hands out pixels:
+  clients (the terminal's Sixel and Kitty output, the sub-cell quantizer)
+  read it directly.
 - **State follows HTML5 too.** `save()`/`restore()` cover the drawing
   state (styles, transform, clip, line settings) but not the current path.
   Every setter, transform and path call returns `Context&`, so calls
