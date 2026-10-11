@@ -111,8 +111,42 @@ static Gdiplus::Color toGDIColor(const Color & input, float globalAlpha = 1.0f) 
 // points with the end colours, as in HTML5, instead of tiling: the
 // gradient line is extended past the path's extents and the stops are
 // rescaled onto it.
-static std::unique_ptr<Gdiplus::Brush> createBrush(const Style & style, float globalAlpha, float display_scale, const Path2D & path) {
+static std::unique_ptr<Gdiplus::Brush> createBrush(const Style & style, float globalAlpha, float display_scale, const Path2D & path, std::unique_ptr<Gdiplus::Brush> * backdrop = nullptr) {
   const auto & stops = style.getColors();
+  if (style.getType() == Style::RADIAL_GRADIENT && !stops.empty()) {
+    // GDI+ has no two-circle gradient. A path gradient over the outer circle
+    // with its centre at the inner one is exact for concentric circles and
+    // an approximation otherwise. It paints nothing outside the circle, so
+    // the caller fills that with the last colour first (the backdrop).
+    Color first = stops.begin()->second, last = stops.rbegin()->second;
+    double r0 = style.r0 * display_scale, r1 = style.r1 * display_scale;
+    if (stops.size() == 1 || r1 <= 0.0 || r1 <= r0) {
+      return std::make_unique<Gdiplus::SolidBrush>(toGDIColor(last, globalAlpha));
+    }
+    Gdiplus::GraphicsPath circle;
+    double cx = style.p1.x * display_scale, cy = style.p1.y * display_scale;
+    circle.AddEllipse(Gdiplus::RectF(Gdiplus::REAL(cx - r1), Gdiplus::REAL(cy - r1), Gdiplus::REAL(2 * r1), Gdiplus::REAL(2 * r1)));
+    auto brush = std::make_unique<Gdiplus::PathGradientBrush>(&circle);
+    brush->SetCenterPoint(Gdiplus::PointF(Gdiplus::REAL(style.p0.x * display_scale), Gdiplus::REAL(style.p0.y * display_scale)));
+    // Positions run from 0 at the circle to 1 at the centre.
+    std::vector<Gdiplus::Color> colors;
+    std::vector<Gdiplus::REAL> positions;
+    colors.push_back(toGDIColor(last, globalAlpha));
+    positions.push_back(0.0f);
+    for (auto it = stops.rbegin(); it != stops.rend(); ++it) {
+      double t = std::min(1.0, std::max(0.0, double(it->first)));
+      double u = (r0 + t * (r1 - r0)) / r1;  // distance from the centre as a fraction of r1
+      double pos = std::min(1.0, std::max(0.0, 1.0 - u));
+      if (pos <= positions.back()) pos = positions.back();
+      colors.push_back(toGDIColor(it->second, globalAlpha));
+      positions.push_back(Gdiplus::REAL(pos));
+    }
+    colors.push_back(toGDIColor(first, globalAlpha));
+    positions.push_back(1.0f);
+    brush->SetInterpolationColors(colors.data(), positions.data(), (INT)colors.size());
+    if (backdrop) *backdrop = std::make_unique<Gdiplus::SolidBrush>(toGDIColor(last, globalAlpha));
+    return brush;
+  }
   if (style.getType() != Style::LINEAR_GRADIENT || stops.empty()) {
     return std::make_unique<Gdiplus::SolidBrush>(toGDIColor(style.color, globalAlpha));
   }
@@ -166,7 +200,7 @@ GDIPlusSurface::GDIPlusSurface(const unsigned char * buffer, size_t size) : Surf
 
 
 void
-GDIPlusSurface::renderPath(RenderMode mode, const TransformationMatrix & transformation, const Path2D & input_path, const Style & style, float lineWidth, Operator op, float display_scale, float globalAlpha, float shadowBlur, float shadowOffsetX, float shadowOffsetY, const Color& shadowColor, const Path2D& clipPath, const std::vector<float> & lineDash) {
+GDIPlusSurface::renderPath(RenderMode mode, const TransformationMatrix & transformation, const Path2D & input_path, const Style & style, float lineWidth, Operator op, float display_scale, float globalAlpha, float shadowBlur, float shadowOffsetX, float shadowOffsetY, const Color& shadowColor, const Path2D& clipPath, const LineStyle & lineStyle) {
   initializeContext();
   
   if (!clipPath.empty()) {
@@ -189,22 +223,49 @@ GDIPlusSurface::renderPath(RenderMode mode, const TransformationMatrix & transfo
   Gdiplus::GraphicsPath path;
   toGDIPath(input_path, path, display_scale);
 
-  auto brush = createBrush(style, globalAlpha, display_scale, input_path);
+  std::unique_ptr<Gdiplus::Brush> backdrop;
+  auto brush = createBrush(style, globalAlpha, display_scale, input_path, &backdrop);
   switch (mode) {
   case RenderMode::STROKE:
     {
-      Gdiplus::Pen pen(brush.get(), lineWidth * display_scale);
-      if (!lineDash.empty()) {
-	// no matrix transformation for dash (it looks weird)
+      float width = lineWidth * display_scale;
+      Gdiplus::Pen pen(brush.get(), width);
+      Gdiplus::LineCap cap = Gdiplus::LineCapFlat;
+      Gdiplus::DashCap dash_cap = Gdiplus::DashCapFlat;
+      if (lineStyle.cap == LineCap::ROUND) {
+	cap = Gdiplus::LineCapRound;
+	dash_cap = Gdiplus::DashCapRound;
+      } else if (lineStyle.cap == LineCap::SQUARE) {
+	cap = Gdiplus::LineCapSquare;
+      }
+      pen.SetLineCap(cap, cap, dash_cap);
+      switch (lineStyle.join) {
+      case LineJoin::MITER: pen.SetLineJoin(Gdiplus::LineJoinMiter); break;
+      case LineJoin::ROUND: pen.SetLineJoin(Gdiplus::LineJoinRound); break;
+      case LineJoin::BEVEL: pen.SetLineJoin(Gdiplus::LineJoinBevel); break;
+      }
+      pen.SetMiterLimit(std::max(1.0f, lineStyle.miterLimit));
+      if (!lineStyle.dash.empty() && width > 0.0f) {
+	// GDI+ measures dashes in pen widths.
 	std::vector<float> dash;
-	for (auto & v : lineDash) dash.push_back(v * display_scale);
+	for (auto & v : lineStyle.dash) dash.push_back(std::max(0.001f, transformation.transformSize(v) * display_scale / width));
 	pen.SetDashStyle(Gdiplus::DashStyleCustom);
-	pen.SetDashPattern(dash.data(), dash.size());
+	pen.SetDashPattern(dash.data(), (INT)dash.size());
+	pen.SetDashOffset(transformation.transformSize(lineStyle.dashOffset) * display_scale / width);
       }
       g->DrawPath(&pen, &path);
     }
     break;
   case RenderMode::FILL:
+    if (backdrop) {
+      // Outside the gradient's outer circle, which the path gradient leaves unpainted.
+      Gdiplus::GraphicsPath circle;
+      double r1 = style.r1 * display_scale;
+      circle.AddEllipse(Gdiplus::RectF(Gdiplus::REAL(style.p1.x * display_scale - r1), Gdiplus::REAL(style.p1.y * display_scale - r1), Gdiplus::REAL(2 * r1), Gdiplus::REAL(2 * r1)));
+      Gdiplus::Region outside(&path);
+      outside.Exclude(&circle);
+      g->FillRegion(backdrop.get(), &outside);
+    }
     g->FillPath(brush.get(), &path);
     break;
   }

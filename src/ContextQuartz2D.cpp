@@ -1,5 +1,6 @@
 #include <ContextQuartz2D.h>
 
+#include <algorithm>
 #include <cassert>
 
 #include <ImageIO/ImageIO.h>
@@ -81,7 +82,7 @@ Quartz2DSurface::sendPath(const Path2D & path, float scale) {
 }
 
 void
-Quartz2DSurface::renderPath(RenderMode mode, const TransformationMatrix & transformation, const Path2D & path, const Style & style, float lineWidth, Operator op, float display_scale, float globalAlpha, float shadowBlur, float shadowOffsetX, float shadowOffsetY, const Color & shadowColor, const Path2D & clipPath, const std::vector<float> & lineDash) {
+Quartz2DSurface::renderPath(RenderMode mode, const TransformationMatrix & transformation, const Path2D & path, const Style & style, float lineWidth, Operator op, float display_scale, float globalAlpha, float shadowBlur, float shadowOffsetX, float shadowOffsetY, const Color & shadowColor, const Path2D & clipPath, const LineStyle & lineStyle) {
   initializeContext();
 
   bool has_shadow = shadowBlur > 0.0f || shadowOffsetX != 0.0f || shadowOffsetY != 0.0f;
@@ -112,43 +113,59 @@ Quartz2DSurface::renderPath(RenderMode mode, const TransformationMatrix & transf
 			       style.color.blue,
 			       style.color.alpha * globalAlpha);
     CGContextSetLineWidth(gc, lineWidth * display_scale);
+    switch (lineStyle.cap) {
+    case LineCap::BUTT: CGContextSetLineCap(gc, kCGLineCapButt); break;
+    case LineCap::ROUND: CGContextSetLineCap(gc, kCGLineCapRound); break;
+    case LineCap::SQUARE: CGContextSetLineCap(gc, kCGLineCapSquare); break;
+    }
+    switch (lineStyle.join) {
+    case LineJoin::MITER: CGContextSetLineJoin(gc, kCGLineJoinMiter); break;
+    case LineJoin::ROUND: CGContextSetLineJoin(gc, kCGLineJoinRound); break;
+    case LineJoin::BEVEL: CGContextSetLineJoin(gc, kCGLineJoinBevel); break;
+    }
+    CGContextSetMiterLimit(gc, lineStyle.miterLimit);
+    if (!lineStyle.dash.empty()) {
+      std::vector<CGFloat> dash;
+      for (auto & v : lineStyle.dash) dash.push_back(transformation.transformSize(v) * display_scale);
+      CGContextSetLineDash(gc, transformation.transformSize(lineStyle.dashOffset) * display_scale, dash.data(), dash.size());
+    } else {
+      CGContextSetLineDash(gc, 0, NULL, 0);
+    }
     CGContextStrokePath(gc);  
     break;
   case RenderMode::FILL:
-    if (style.getType() == Style::LINEAR_GRADIENT) {
+    if ((style.getType() == Style::LINEAR_GRADIENT || style.getType() == Style::RADIAL_GRADIENT) && !style.getColors().empty()) {
+      // Every stop, padded with the end colours beyond the end points.
       const std::map<float, Color> & colors = style.getColors();
-      if (!colors.empty()) {
-	std::map<float, Color>::const_iterator it0 = colors.begin(), it1 = colors.end();
-	it1--;
-	const Color & c0 = it0->second, c1 = it1->second;
-	
-	size_t num_locations = 2;
-	CGFloat locations[2] = { 0.0, 1.0 };
-	CGFloat components[8] = {
-	  c0.red, c0.green, c0.blue, c0.alpha * globalAlpha,
-	  c1.red, c1.green, c1.blue, c1.alpha * globalAlpha
-	};
-	
-	CGGradientRef myGradient = CGGradientCreateWithColorComponents(cache->getColorSpace(), components, locations, num_locations);
-	
-        CGContextSaveGState(gc);
-        sendPath(path, display_scale);
-        CGContextClip(gc);
-	
-	CGPoint myStartPoint, myEndPoint;
-	myStartPoint.x = style.p0.x * display_scale;
-	myStartPoint.y = style.p0.y * display_scale;
-	myEndPoint.x = style.p1.x * display_scale;
-	myEndPoint.y = style.p1.y * display_scale;
-	CGContextDrawLinearGradient(gc, myGradient, myStartPoint, myEndPoint, 0);
-	
-        CGContextRestoreGState(gc);
+      std::vector<CGFloat> locations, components;
+      for (auto & stop : colors) {
+	locations.push_back(std::min(1.0f, std::max(0.0f, stop.first)));
+	components.push_back(stop.second.red);
+	components.push_back(stop.second.green);
+	components.push_back(stop.second.blue);
+	components.push_back(stop.second.alpha * globalAlpha);
+      }
+      CGGradientRef myGradient = CGGradientCreateWithColorComponents(cache->getColorSpace(), components.data(), locations.data(), locations.size());
+
+      CGContextSaveGState(gc);
+      sendPath(path, display_scale);
+      CGContextClip(gc);
+
+      CGPoint myStartPoint = CGPointMake(style.p0.x * display_scale, style.p0.y * display_scale);
+      CGPoint myEndPoint = CGPointMake(style.p1.x * display_scale, style.p1.y * display_scale);
+      CGGradientDrawingOptions pad = kCGGradientDrawsBeforeStartLocation | kCGGradientDrawsAfterEndLocation;
+      if (style.getType() == Style::RADIAL_GRADIENT) {
+	CGContextDrawRadialGradient(gc, myGradient, myStartPoint, style.r0 * display_scale, myEndPoint, style.r1 * display_scale, pad);
+      } else {
+	CGContextDrawLinearGradient(gc, myGradient, myStartPoint, myEndPoint, pad);
+      }
+
+      CGContextRestoreGState(gc);
 
 #ifdef MEMDEBUG
-	// if (CFGetRetainCount(myGradient) != 1) cerr << "leaking memory 7!\n";
+      // if (CFGetRetainCount(myGradient) != 1) cerr << "leaking memory 7!\n";
 #endif
-	CGGradientRelease(myGradient);
-      }
+      CGGradientRelease(myGradient);
     } else {
       sendPath(path, display_scale);
       CGContextSetRGBFillColor(gc, style.color.red,

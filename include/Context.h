@@ -8,6 +8,7 @@
 #include <Image.h>
 #include <HitRegion.h>
 
+#include <cmath>
 #include <string>
 #include <memory>
 
@@ -97,6 +98,13 @@ namespace canvas {
       return *this;
     }
 
+    Context & quadraticCurveTo(double cpx, double cpy, double x, double y) {
+      return addCurve(false, cpx, cpy, 0, 0, x, y);
+    }
+    Context & bezierCurveTo(double cp1x, double cp1y, double cp2x, double cp2y, double x, double y) {
+      return addCurve(true, cp1x, cp1y, cp2x, cp2y, x, y);
+    }
+
     Context & arc(double x, double y, double r, double a0, double a1, bool t = false) {
       Path2D path;
       path.arc(Point(x, y), r, a0, a1, t);
@@ -137,10 +145,20 @@ namespace canvas {
     Context & fillText(const std::string & text, double x, double y) { return renderText(RenderMode::FILL, fillStyle, text, Point(x, y)); }
     Context & strokeText(const std::string & text, double x, double y) { return renderText(RenderMode::STROKE, strokeStyle, text, Point(x, y)); }
 
+    // As in HTML5: an odd number of lengths is repeated to make an even
+    // number, and a negative or non-finite length ignores the call.
     Context & setLineDash(std::vector<float> dash) {
+      for (auto v : dash) {
+	if (!(v >= 0.0f) || !std::isfinite(v)) return *this;
+      }
+      if (dash.size() % 2 == 1) {
+	auto copy = dash;
+	dash.insert(dash.end(), copy.begin(), copy.end());
+      }
       lineDash = dash;
       return *this;
     }
+    const std::vector<float> & getLineDash() const { return lineDash; }
     
     unsigned int getWidth() const { return getDefaultSurface().getLogicalWidth(); }
     unsigned int getHeight() const { return getDefaultSurface().getLogicalHeight(); }
@@ -209,6 +227,16 @@ namespace canvas {
       return gradient;
     }
 
+    // The gradient runs from the circle (x0, y0, r0) to the circle (x1, y1, r1)
+    // and is a value like the linear one. It pads beyond both circles.
+    Style createRadialGradient(double x0, double y0, double r0, double x1, double y1, double r1) {
+      Style gradient(this);
+      gradient.setType(Style::RADIAL_GRADIENT);
+      gradient.setVector(x0, y0, x1, y1);
+      gradient.setRadii(r0, r1);
+      return gradient;
+    }
+
     float getDisplayScale() const { return display_scale_; }
     Context & addHitRegion(std::string id, std::string cursor = "") {
       if (!currentPath.empty()) {
@@ -239,11 +267,37 @@ namespace canvas {
     Style & createPattern(const ImageData & image, const char * repeat) {
       
     }
-    Style & createRadialGradient(double x0, double y0, double r0, double x1, double y1, double r1) {
-     }
 #endif
     
   protected:
+    LineStyle getLineStyle() const {
+      LineStyle line;
+      line.cap = lineCap.get();
+      line.join = lineJoin.get();
+      line.miterLimit = miterLimit.get();
+      line.dashOffset = lineDashOffset.get();
+      line.dash = lineDash;
+      return line;
+    }
+
+    // The curve is worked out in user space from the current point, then
+    // transformed with the rest of the path.
+    Context & addCurve(bool cubic, double c1x, double c1y, double c2x, double c2y, double x, double y) {
+      TransformationMatrix inverse;
+      Path2D path;
+      double scale = currentTransform.transformSize(1.0);
+      size_t first = 0;
+      if (!currentPath.empty()) {
+	if (!currentTransform.invert(inverse)) return *this;
+	path.moveTo(inverse.multiply(currentPath.getCurrentPoint()));
+	first = 1;
+      }
+      if (cubic) path.bezierCurveTo(c1x, c1y, c2x, c2y, x, y, scale);
+      else path.quadraticCurveTo(c1x, c1y, x, y, scale);
+      currentPath.append(path.transform(currentTransform), first);
+      return *this;
+    }
+
     // The path is in device coordinates.
     Context & renderPath(RenderMode mode, const Path2D & path, const Style & style0, Operator op = Operator::SOURCE_OVER) {
       auto scaled_lineWidth = currentTransform.transformSize(lineWidth.get(), true);
@@ -251,7 +305,7 @@ namespace canvas {
 	auto style = style0.transform(currentTransform);
 	
 	if (hasNativeShadows()) {
-	  getDefaultSurface().renderPath(mode, currentTransform, path, style, scaled_lineWidth, op, getDisplayScale(), globalAlpha.get(), shadowBlur.get(), shadowOffsetX.get(), shadowOffsetY.get(), shadowColor.get(), clipPath, lineDash);
+	  getDefaultSurface().renderPath(mode, currentTransform, path, style, scaled_lineWidth, op, getDisplayScale(), globalAlpha.get(), shadowBlur.get(), shadowOffsetX.get(), shadowOffsetY.get(), shadowColor.get(), clipPath, getLineStyle());
 	} else {
 	  if (hasShadow()) {
 	    float b = shadowBlur.get(), bs = shadowBlur.get() * getDisplayScale();
@@ -264,7 +318,7 @@ namespace canvas {
 	    tmp_path.offset(shadowOffsetX.get() + bi, shadowOffsetY.get() + bi);
 	    tmp_clipPath.offset(shadowOffsetX.get() + bi, shadowOffsetY.get() + bi);
 	    
-	    shadow->renderPath(mode, currentTransform, tmp_path, shadow_style, scaled_lineWidth, op, getDisplayScale(), globalAlpha.get(), 0, 0, 0, shadowColor.get(), tmp_clipPath, lineDash);
+	    shadow->renderPath(mode, currentTransform, tmp_path, shadow_style, scaled_lineWidth, op, getDisplayScale(), globalAlpha.get(), 0, 0, 0, shadowColor.get(), tmp_clipPath, getLineStyle());
 	    auto shadow1 = shadow->blur(bs, bs);
 	    getDefaultSurface().drawImage(*shadow1, Point(-b, -b), shadow->getLogicalWidth(), shadow->getLogicalHeight(), getDisplayScale(), 1.0f, 0.0f, 0.0f, 0.0f, shadowColor.get(), Path2D(), false);
 #else
@@ -275,13 +329,13 @@ namespace canvas {
 	    tmp_path.offset(shadowOffsetX.get() + bi, shadowOffsetY.get() + bi);
 	    tmp_clipPath.offset(shadowOffsetX.get() + bi, shadowOffsetY.get() + bi);
 	    
-	    shadow->renderPath(mode, currentTransform, tmp_path, shadow_style, scaled_lineWidth, op, getDisplayScale(), globalAlpha.get(), 0, 0, 0, shadowColor.get(), tmp_clipPath, lineDash);
+	    shadow->renderPath(mode, currentTransform, tmp_path, shadow_style, scaled_lineWidth, op, getDisplayScale(), globalAlpha.get(), 0, 0, 0, shadowColor.get(), tmp_clipPath, getLineStyle());
 	    auto shadow1 = shadow->blur(bs, bs);
 	    auto shadow2 = shadow1->colorize(shadowColor.get());
 	    getDefaultSurface().drawImage(*shadow2, Point(-b, -b), shadow->getLogicalWidth(), shadow->getLogicalHeight(), getDisplayScale(), 1.0f, 0.0f, 0.0f, 0.0f, shadowColor.get(), Path2D(), false);
 #endif
 	  }
-	  getDefaultSurface().renderPath(mode, currentTransform, path, style, scaled_lineWidth, op, getDisplayScale(), globalAlpha.get(), 0, 0, 0, shadowColor.get(), clipPath, lineDash);
+	  getDefaultSurface().renderPath(mode, currentTransform, path, style, scaled_lineWidth, op, getDisplayScale(), globalAlpha.get(), 0, 0, 0, shadowColor.get(), clipPath, getLineStyle());
 	}
       }
       return *this;

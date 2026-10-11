@@ -2,6 +2,7 @@
 #define _CANVAS_GRAPHICSSTATE_H_
 
 #include <Style.h>
+#include <LineStyle.h>
 #include <Font.h>
 #include <TextBaseline.h>
 #include <TextAlign.h>
@@ -15,6 +16,10 @@ namespace canvas {
   public:
     GraphicsState()
       : lineWidth(this, 1.0f),
+      lineCap(this),
+      lineJoin(this),
+      miterLimit(this, 10.0f),
+      lineDashOffset(this, 0.0f),
       fillStyle(this),
       strokeStyle(this),
       shadowBlur(this),
@@ -67,6 +72,10 @@ namespace canvas {
     const TransformationMatrix & getTransform() const { return currentTransform; }
     
     Attribute<float> lineWidth;
+    LineCapAttribute lineCap;
+    LineJoinAttribute lineJoin;
+    Attribute<float> miterLimit;
+    Attribute<float> lineDashOffset;
     Style fillStyle;
     Style strokeStyle;
     Attribute<float> shadowBlur;

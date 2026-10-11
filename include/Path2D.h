@@ -51,6 +51,14 @@ namespace canvas {
     void arc(const Point & p, double radius, double sa, double ea, bool anticlockwise);
     void arcTo(const Point & p1, const Point & p2, double radius);
 
+    // Curves are flattened into line segments as they are added, so every
+    // backend, transform and hit test treats them as lines. scale is the
+    // factor from these coordinates to pixels, which sets how many
+    // segments the curve gets. With no current point the curve starts at
+    // its first control point.
+    void quadraticCurveTo(double cpx, double cpy, double x, double y, double scale = 1.0);
+    void bezierCurveTo(double cp1x, double cp1y, double cp2x, double cp2y, double x, double y, double scale = 1.0);
+
     void rect(double x, double y, double w, double h) {
       moveTo(x, y);
       lineTo(x + w, y);
