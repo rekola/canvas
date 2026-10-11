@@ -8,6 +8,7 @@ option(CANVAS_BACKEND_CAIRO "Cairo backend (Linux)" ON)
 option(CANVAS_BACKEND_GDIPLUS "GDI+ backend (Windows)" OFF)
 option(CANVAS_BACKEND_QUARTZ "Quartz 2D backend (Apple)" OFF)
 option(CANVAS_BACKEND_ANDROID "Android Canvas backend (JNI)" OFF)
+option(CANVAS_TEXTURE_PACKING "PackedImageData: GL texture formats, DXT and ETC1 compression" OFF)
 option(CANVAS_BUILD_TESTS "Build the tests" ${PROJECT_IS_TOP_LEVEL})
 
 # The core. Sources include their headers as <Name.h>, so the include
@@ -15,14 +16,16 @@ option(CANVAS_BUILD_TESTS "Build the tests" ${PROJECT_IS_TOP_LEVEL})
 add_library(canvas
   src/Color.cpp
   src/ColorProvider.cpp
-  src/FloydSteinberg.cpp
   src/Image.cpp
   src/ImageData.cpp
-  src/PackedImageData.cpp
   src/Path2D.cpp
-  src/dxt.cpp
-  src/rg_etc1.cpp)
+  )
 add_library(canvas::canvas ALIAS canvas)
+
+if(CANVAS_TEXTURE_PACKING)
+  target_sources(canvas PRIVATE src/FloydSteinberg.cpp src/PackedImageData.cpp src/dxt.cpp src/rg_etc1.cpp)
+  target_compile_definitions(canvas PUBLIC CANVAS_HAS_TEXTURE_PACKING)
+endif()
 target_include_directories(canvas PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include/canvas>)

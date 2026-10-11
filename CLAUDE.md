@@ -18,7 +18,9 @@ ctest --test-dir build --output-on-failure
 
 Needs `libcairo2-dev` and `pkg-config` for the default Cairo backend. One
 option per backend: `CANVAS_BACKEND_CAIRO` (on), `CANVAS_BACKEND_GDIPLUS`,
-`CANVAS_BACKEND_QUARTZ`, `CANVAS_BACKEND_ANDROID` (off). The exported target
+`CANVAS_BACKEND_QUARTZ`, `CANVAS_BACKEND_ANDROID` (off). `CANVAS_TEXTURE_PACKING`
+(off) adds `PackedImageData`, Floyd-Steinberg and the DXT/ETC1 compressors,
+behind the `CANVAS_HAS_TEXTURE_PACKING` macro. The exported target
 is `canvas::canvas`. `src/PerlinSurface.cpp` is stale (does not compile) and
 is not in the build.
 
@@ -54,8 +56,6 @@ without a backend. Add a pixel test with every behaviour change.
 
 ## Known gaps
 
-- DXT/ETC1 texture compression is compiled in because `Surface.h` includes
-  `PackedImageData` inline; making it optional needs a small refactor.
 - GDI+ is only compile-checked in CI (`ci-windows.yml`, MSYS2 UCRT64);
   the pixel tests are Cairo-only. Its clipping is per-pixel and
   unantialiased.

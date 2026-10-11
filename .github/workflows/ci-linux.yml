@@ -25,3 +25,9 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+      - name: Build and test with texture packing
+        run: |
+          cmake -B build-packing -DCMAKE_BUILD_TYPE=Release -DCANVAS_TEXTURE_PACKING=ON
+          cmake --build build-packing -j
+          ctest --test-dir build-packing --output-on-failure
