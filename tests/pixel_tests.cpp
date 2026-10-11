@@ -301,5 +301,16 @@ int main() {
     ctx.translate(8, 8);
     CHECK(ctx.isPointInPath(path, 9, 9) && !ctx.isPointInPath(path, 2, 2));
   }
+  {  // A filter style draws its solid colour, not whatever was drawn before it.
+    TestContext ctx(4, 2);
+    ctx.fillStyle = "#ff0000";
+    ctx.fillRect(0, 0, 2, 2);
+    Style filter(&ctx);
+    filter.setType(Style::FILTER);
+    ctx.fillStyle = filter;
+    ctx.fillRect(2, 0, 2, 2);
+    Px p = pixel(ctx, 3, 1);
+    CHECK(p.a == 255 && p.r == 0 && p.g == 0 && p.b == 0);
+  }
   return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

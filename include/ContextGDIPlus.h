@@ -30,7 +30,7 @@ namespace canvas {
 
     static inline Gdiplus::PixelFormat getPixelFormat(int num_channels) {
       switch (num_channels) {
-      case 1: return PixelFormat8bppIndexed;
+      case 1: return PixelFormat32bppPARGB;  // an alpha mask: the alpha of a 32-bit pixel
       case 3: return PixelFormat32bppRGB;
       case 4: return PixelFormat32bppPARGB;
       }
@@ -44,49 +44,44 @@ namespace canvas {
 	storage = new BYTE[4 * numPixels];
 	memset(storage, 0, 4 * numPixels);
 	bitmap = std::make_unique<Gdiplus::Bitmap>(_actual_width, _actual_height, 4 * _actual_width, getPixelFormat(_num_channels), storage);
-	if (_num_channels == 1) {
-	  auto size = bitmap->GetPaletteSize();
-	  auto pal = (Gdiplus::ColorPalette*)malloc(sizeof(Gdiplus::ColorPalette) + size * sizeof(Gdiplus::ARGB));
-	  if (pal) {
-	    pal->Count = size;
-	    pal->Flags = Gdiplus::PaletteFlagsGrayScale;
-	    for (size_t i = 0; i < size; i++) {
-	      pal->Entries[i] = Gdiplus::Color::MakeARGB(0xFF, (BYTE)i, (BYTE)i, (BYTE)i);
-	      // pal->Entries[i] = Gdiplus::Color::MakeARGB((BYTE)i, 0, 0, 0);
-	    }
-	    bitmap->SetPalette(pal);
-	    free(pal);
-	  }
- 	}
       }
     }
     GDIPlusSurface(const std::string & filename);
     GDIPlusSurface(const unsigned char * buffer, size_t size);
+    // The surface's pixels are premultiplied BGRA words (the alpha of a
+    // one channel image, with black colour); the image is converted from
+    // whatever format it says it is in.
     GDIPlusSurface(const ImageData & image) : Surface(image.getWidth(), image.getHeight(), image.getWidth(), image.getHeight(), image.getNumChannels())
     {
-      // stride must be a multiple of four
-      size_t numPixels = image.getWidth() * image.getHeight();
+      size_t numPixels = size_t(image.getWidth()) * image.getHeight();
+      unsigned int channels = image.getNumChannels();
+      bool bgr = image.getChannelOrder() == ChannelOrder::BGR, premultiplied = image.isPremultiplied();
       storage = new BYTE[4 * numPixels];
-      if (image.getNumChannels() == 4) {
-#if 0
-	for (unsigned int i = 0; i < numPixels; i++) {
-	  storage[4 * i + 0] = image.getData()[4 * i + 0];
-	  storage[4 * i + 1] = image.getData()[4 * i + 1];
-	  storage[4 * i + 2] = image.getData()[4 * i + 2];
-	  storage[4 * i + 3] = image.getData()[4 * i + 3];
+      const unsigned char * in = image.getData();
+      for (size_t i = 0; i < numPixels; i++) {
+	const unsigned char * p = in + channels * i;
+	unsigned int r = 0, g = 0, b = 0, a = 255;
+	if (channels == 1) {
+	  a = p[0];
+	} else {
+	  r = bgr ? p[2] : p[0];
+	  g = p[1];
+	  b = bgr ? p[0] : p[2];
+	  if (channels == 4) {
+	    a = p[3];
+	    if (!premultiplied) {
+	      r = (r * a + 127) / 255;
+	      g = (g * a + 127) / 255;
+	      b = (b * a + 127) / 255;
+	    }
+	  }
 	}
-#else
-	memcpy(storage, image.getData(), 4 * numPixels);
-#endif
-      } else {
-  	for (unsigned int i = 0; i < numPixels; i++) {
-	  storage[4 * i + 0] = image.getData()[3 * i + 2];
-	  storage[4 * i + 1] = image.getData()[3 * i + 1];
-	  storage[4 * i + 2] = image.getData()[3 * i + 0];
-	  storage[4 * i + 3] = 255;
-	}
+	storage[4 * i + 0] = (BYTE)b;
+	storage[4 * i + 1] = (BYTE)g;
+	storage[4 * i + 2] = (BYTE)r;
+	storage[4 * i + 3] = (BYTE)a;
       }
-      bitmap = std::unique_ptr<Gdiplus::Bitmap>(new Gdiplus::Bitmap(image.getWidth(), image.getHeight(), image.getWidth() * 4, getPixelFormat(image.getNumChannels()), storage));
+      bitmap = std::unique_ptr<Gdiplus::Bitmap>(new Gdiplus::Bitmap(image.getWidth(), image.getHeight(), image.getWidth() * 4, getPixelFormat(channels), storage));
     }
     ~GDIPlusSurface() {
       delete[] storage;
@@ -121,6 +116,7 @@ namespace canvas {
     std::unique_ptr<Image> createImage(float display_scale) override;
     
   protected:
+    std::unique_ptr<ImageData> readPixels() override;
     void configureFonts(const Font& font, float displayScale, Gdiplus::StringFormat * format);
 
     void * lockMemory(bool write_access = false) override {
@@ -144,7 +140,8 @@ namespace canvas {
 	}
 	g = std::make_unique<Gdiplus::Graphics>(bitmap.get());
 	if (g) {
-	  g->SetPixelOffsetMode(Gdiplus::PixelOffsetModeNone);
+	  // Integer coordinates are pixel edges, as in HTML5 canvas.
+	  g->SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
 	  g->SetCompositingQuality(Gdiplus::CompositingQualityHighQuality);
 	  g->SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
 	}

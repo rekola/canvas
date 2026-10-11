@@ -1,6 +1,8 @@
 #include <ContextGDIPlus.h>
 
+#include <algorithm>
 #include <cassert>
+#include <cstdlib>
 
 bool canvas::ContextGDIPlus::is_initialized = false;
 ULONG_PTR canvas::ContextGDIPlus::m_gdiplusToken;
@@ -105,6 +107,53 @@ static Gdiplus::Color toGDIColor(const Color & input, float globalAlpha = 1.0f) 
 #endif
 }
 
+// A brush for a fill or a stroke. A gradient is padded beyond its end
+// points with the end colours, as in HTML5, instead of tiling: the
+// gradient line is extended past the path's extents and the stops are
+// rescaled onto it.
+static std::unique_ptr<Gdiplus::Brush> createBrush(const Style & style, float globalAlpha, float display_scale, const Path2D & path) {
+  const auto & stops = style.getColors();
+  if (style.getType() != Style::LINEAR_GRADIENT || stops.empty()) {
+    return std::make_unique<Gdiplus::SolidBrush>(toGDIColor(style.color, globalAlpha));
+  }
+  Color first = stops.begin()->second, last = stops.rbegin()->second;
+  double x0 = style.p0.x * display_scale, y0 = style.p0.y * display_scale;
+  double dx = style.p1.x * display_scale - x0, dy = style.p1.y * display_scale - y0;
+  double len2 = dx * dx + dy * dy;
+  if (stops.size() == 1 || len2 == 0.0) {
+    return std::make_unique<Gdiplus::SolidBrush>(toGDIColor(last, globalAlpha));
+  }
+  double min_x, min_y, max_x, max_y;
+  path.getExtents(min_x, min_y, max_x, max_y);
+  double xs[2] = { min_x * display_scale, max_x * display_scale }, ys[2] = { min_y * display_scale, max_y * display_scale };
+  double umin = 0.0, umax = 1.0;
+  for (double x : xs) {
+    for (double y : ys) {
+      double u = ((x - x0) * dx + (y - y0) * dy) / len2;
+      umin = std::min(umin, u);
+      umax = std::max(umax, u);
+    }
+  }
+  double k = std::max(-umin, umax - 1.0) + 0.01;
+  auto brush = std::make_unique<Gdiplus::LinearGradientBrush>(
+    Gdiplus::PointF(Gdiplus::REAL(x0 - dx * k), Gdiplus::REAL(y0 - dy * k)),
+    Gdiplus::PointF(Gdiplus::REAL(x0 + dx * (1.0 + k)), Gdiplus::REAL(y0 + dy * (1.0 + k))),
+    toGDIColor(first, globalAlpha), toGDIColor(last, globalAlpha));
+  std::vector<Gdiplus::Color> colors;
+  std::vector<Gdiplus::REAL> positions;
+  colors.push_back(toGDIColor(first, globalAlpha));
+  positions.push_back(0.0f);
+  for (auto & stop : stops) {
+    double t = std::min(1.0, std::max(0.0, double(stop.first)));
+    colors.push_back(toGDIColor(stop.second, globalAlpha));
+    positions.push_back(Gdiplus::REAL((t + k) / (1.0 + 2.0 * k)));
+  }
+  colors.push_back(toGDIColor(last, globalAlpha));
+  positions.push_back(1.0f);
+  brush->SetInterpolationColors(colors.data(), positions.data(), (INT)colors.size());
+  return brush;
+}
+
 GDIPlusSurface::GDIPlusSurface(const std::string & filename) : Surface(0, 0, 0, 0, false) {
   auto tmp = from_utf8(filename);
   bitmap = std::unique_ptr<Gdiplus::Bitmap>(Gdiplus::Bitmap::FromFile(tmp.data()));
@@ -140,10 +189,11 @@ GDIPlusSurface::renderPath(RenderMode mode, const TransformationMatrix & transfo
   Gdiplus::GraphicsPath path;
   toGDIPath(input_path, path, display_scale);
 
+  auto brush = createBrush(style, globalAlpha, display_scale, input_path);
   switch (mode) {
   case RenderMode::STROKE:
     {
-      Gdiplus::Pen pen(toGDIColor(style.color, globalAlpha), lineWidth * display_scale);
+      Gdiplus::Pen pen(brush.get(), lineWidth * display_scale);
       if (!lineDash.empty()) {
 	// no matrix transformation for dash (it looks weird)
 	std::vector<float> dash;
@@ -155,22 +205,8 @@ GDIPlusSurface::renderPath(RenderMode mode, const TransformationMatrix & transfo
     }
     break;
   case RenderMode::FILL:
-    if (style.getType() == Style::LINEAR_GRADIENT) {
-      const std::map<float, Color> & colors = style.getColors();
-      if (!colors.empty()) {
-	auto it0 = colors.begin(), it1 = colors.end();
-	it1--;
-	const Color & c0 = it0->second, c1 = it1->second;
-	Gdiplus::LinearGradientBrush brush(Gdiplus::PointF(Gdiplus::REAL(style.p0.x * display_scale), Gdiplus::REAL(style.p0.y * display_scale)),
-					   Gdiplus::PointF(Gdiplus::REAL(style.p1.x * display_scale), Gdiplus::REAL(style.p1.y * display_scale)),
-					   toGDIColor(c0, globalAlpha),
-					   toGDIColor(c1, globalAlpha));
-	g->FillPath(&brush, &path);
-      }
-    } else {
-      Gdiplus::SolidBrush brush(toGDIColor(style.color, globalAlpha));
-      g->FillPath(&brush, &path);
-    }
+    g->FillPath(brush.get(), &path);
+    break;
   }
 
   if (!clipPath.empty()) {
@@ -190,32 +226,19 @@ GDIPlusSurface::drawNativeSurface(GDIPlusSurface & img, const Point & p, double 
   } else {
     g->SetInterpolationMode( Gdiplus::InterpolationModeNearestNeighbor );
   }
-  if (globalAlpha < 1.0f && 0) {
-#if 0
-    ImageAttributes  imageAttributes;
-    ColorMatrix colorMatrix = {
-      1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-      0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
-      0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
-      0.0f, 0.0f, 0.0f, alpha, 0.0f,
-      0.0f, 0.0f, 0.0f, 0.0f, 1.0f};
-   
-    imageAttributes.SetColorMatrix( &colorMatrix, 
-				    ColorMatrixFlagsDefault,
-				    ColorAdjustTypeBitmap);
-    graphics.DrawImage( &(*(img.bitmap)),
-			Gdiplus::Rect(p.x, p.y, w, h), // destination rectangle 
-			0, 0,        // upper-left corner of source rectangle 
-			getWidth(),       // width of source rectangle
-			getHeight(),      // height of source rectangle
-			Gdiplus::UnitPixel,
-			&imageAttributes);
-#endif
-  } else if (img.getActualWidth() == (unsigned int)w && img.getActualHeight() == (unsigned int)h && 0) { // this scales image weirdly
-    g->DrawImage(&(*(img.bitmap)), Gdiplus::REAL(p.x * displayScale), Gdiplus::REAL(p.y * displayScale));
-  } else {
-    g->DrawImage(&(*(img.bitmap)), Gdiplus::REAL(p.x * displayScale), Gdiplus::REAL(p.y * displayScale), Gdiplus::REAL(w * displayScale), Gdiplus::REAL(h * displayScale));
-  }
+  // The colour matrix scales alpha by globalAlpha. Flipping at the edges
+  // keeps the interpolation from fading the image's border.
+  Gdiplus::ImageAttributes attributes;
+  Gdiplus::ColorMatrix color_matrix = {
+    1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+    0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 0.0f, globalAlpha, 0.0f,
+    0.0f, 0.0f, 0.0f, 0.0f, 1.0f };
+  attributes.SetColorMatrix(&color_matrix, Gdiplus::ColorMatrixFlagsDefault, Gdiplus::ColorAdjustTypeBitmap);
+  attributes.SetWrapMode(Gdiplus::WrapModeTileFlipXY);
+  Gdiplus::RectF dest(Gdiplus::REAL(p.x * displayScale), Gdiplus::REAL(p.y * displayScale), Gdiplus::REAL(w * displayScale), Gdiplus::REAL(h * displayScale));
+  g->DrawImage(img.bitmap.get(), dest, 0.0f, 0.0f, Gdiplus::REAL(img.getActualWidth()), Gdiplus::REAL(img.getActualHeight()), Gdiplus::UnitPixel, &attributes);
 }
 
 void
@@ -397,14 +420,37 @@ private:
   FilenameConverter * converter = nullptr;
 };
 
+// The locked bits are 32-bit pixels whatever the channel count; one
+// channel is the alpha, three drop the unused byte.
+std::unique_ptr<ImageData>
+GDIPlusSurface::readPixels() {
+  unsigned int w = getActualWidth(), h = getActualHeight(), channels = getNumChannels();
+  auto r = std::make_unique<ImageData>(w, h, channels);
+  r->setFormat(ChannelOrder::BGR, channels == 4);
+  auto src = (const unsigned char *)lockMemory(false);
+  if (src) {
+    size_t stride = size_t(std::abs(data.Stride));
+    for (unsigned int y = 0; y < h; y++) {
+      const unsigned char * row = src + y * stride;
+      unsigned char * out = r->getData() + y * r->getBytesPerRow();
+      if (channels == 4) {
+	memcpy(out, row, 4 * size_t(w));
+      } else {
+	for (unsigned int x = 0; x < w; x++) {
+	  if (channels == 1) out[x] = row[4 * x + 3];
+	  else memcpy(out + 3 * x, row + 4 * x, 3);
+	}
+      }
+    }
+  }
+  releaseMemory();
+  return r;
+}
+
 std::unique_ptr<Image>
 GDIPlusSurface::createImage(float display_scale) {
-  auto buffer = (unsigned char *)lockMemory(false);
-  assert(buffer);
-
-  auto image = std::make_unique<GDIPlusImage>(buffer, getActualWidth(), getActualHeight(), getNumChannels(), display_scale);
-  releaseMemory();
-  
+  auto image = std::make_unique<GDIPlusImage>(display_scale);
+  image->getDataPtr() = readPixels();
   return image;
 }
 

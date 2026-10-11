@@ -169,8 +169,8 @@ CairoSurface::renderPath(RenderMode mode, const TransformationMatrix & transform
     }
     cairo_set_source(cr, pat);
   } else if (style.getType() == Style::FILTER) {
-    double min_x, min_y, max_x, max_y;
-    path.getExtents(min_x, min_y, max_x, max_y);
+    // No filters yet: the style's solid colour, never the previous source.
+    cairo_set_source_rgba(cr, style.color.red, style.color.green, style.color.blue, style.color.alpha * globalAlpha);
   } else {
     cairo_set_source_rgba(cr, style.color.red, style.color.green, style.color.blue, style.color.alpha * globalAlpha);
   }
