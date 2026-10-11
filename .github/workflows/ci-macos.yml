@@ -6,9 +6,7 @@ on:
   pull_request:
 
 jobs:
-  # Builds the Quartz 2D backend so it can't drift from Surface.h and
-  # Context.h. Compile-only for the backend: the pixel tests don't have a
-  # Quartz context yet, so this runs the backend-independent ones.
+  # Builds the Quartz 2D backend and runs the pixel tests on it.
   build-and-test:
     runs-on: macos-latest
 

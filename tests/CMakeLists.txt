@@ -13,7 +13,7 @@ if(CANVAS_BACKEND_CAIRO)
 
 endif()
 
-if(CANVAS_BACKEND_CAIRO OR CANVAS_BACKEND_GDIPLUS)
+if(CANVAS_BACKEND_CAIRO OR CANVAS_BACKEND_GDIPLUS OR CANVAS_BACKEND_QUARTZ)
   add_executable(canvas_tests pixel_tests.cpp)
   target_link_libraries(canvas_tests PRIVATE canvas)
   add_test(NAME canvas_pixels COMMAND canvas_tests)
