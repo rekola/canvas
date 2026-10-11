@@ -6,6 +6,7 @@
 
 namespace canvas {
   class GraphicsState;
+  class Context;
 
   inline void assignValue(float & a, const std::string & b) {
     a = std::stof(b);
@@ -18,9 +19,12 @@ namespace canvas {
   public:
     AttributeBase(GraphicsState * _context) : context(_context) { }
     AttributeBase(const AttributeBase & other) : context(other.context) { }
+    // Assigning copies the value only: an attribute keeps its owner.
+    AttributeBase & operator=(const AttributeBase &) { return *this; }
 
   protected:
-    GraphicsState & getContext() { return *context; }
+    // The owner, for the fluent setters; defined in Context.h.
+    inline Context & getContext();
     
   private:
     GraphicsState * context;
@@ -45,11 +49,11 @@ namespace canvas {
       assignValue(value, s);
       return *this;
     }
-    GraphicsState & operator()(T _value) {
+    Context & operator()(T _value) {
       value = _value;
       return getContext();
     }
-    GraphicsState & operator()(const std::string & s) {
+    Context & operator()(const std::string & s) {
       assignValue(value, s);
       return getContext();
     }

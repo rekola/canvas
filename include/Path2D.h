@@ -4,6 +4,7 @@
 #include <Point.h>
 #include <TransformationMatrix.h>
 
+#include <cmath>
 #include <vector>
 
 namespace canvas {
@@ -22,15 +23,14 @@ namespace canvas {
   
   class Path2D {
   public:
-    Path2D() : current_point_(0.0, 0.0) { }
+    Path2D() : current_point_(0.0, 0.0), subpath_start_(0.0, 0.0) { }
     
     void moveTo(double x, double y) {
       data_.push_back(PathComponent(PathComponent::MOVE_TO, x, y));
-      current_point_ = Point(x, y);
+      current_point_ = subpath_start_ = Point(x, y);
     }
     void moveTo(Point p) {
-      data_.push_back(PathComponent(PathComponent::MOVE_TO, p.x, p.y));
-      current_point_ = std::move(p);
+      moveTo(p.x, p.y);
     }
     void lineTo(double x, double y) {
       data_.push_back(PathComponent(PathComponent::LINE_TO, x, y));
@@ -40,10 +40,11 @@ namespace canvas {
       data_.push_back(PathComponent(PathComponent::LINE_TO, p.x, p.y));
       current_point_ = std::move(p);
     }
+    // Back to the start of the current subpath, not of the whole path.
     void closePath() {
       if (!data_.empty()) {
 	data_.push_back(PathComponent(PathComponent::CLOSE));
-	current_point_ = Point(data_.front().x0, data_.front().y0);
+	current_point_ = subpath_start_;
       }
     }
     void arc(const Point & p, double radius, double sa, double ea, bool anticlockwise);
@@ -61,7 +62,7 @@ namespace canvas {
 
     void clear() {
       data_.clear();
-      current_point_ = Point(0, 0);
+      current_point_ = subpath_start_ = Point(0, 0);
     }
 
     const Point & getCurrentPoint() const { return current_point_; }
@@ -71,20 +72,26 @@ namespace canvas {
 	pc.x0 += dx;
 	pc.y0 += dy;
       }
+      current_point_.x += dx;
+      current_point_.y += dy;
+      subpath_start_.x += dx;
+      subpath_start_.y += dy;
     }
 
     void getExtents(double & min_x, double & min_y, double & max_x, double & max_y) const {
       if (data_.empty()) {
 	min_x = min_y = max_x = max_y = 0;
       } else {
-	auto it = data_.begin();
-	min_x = max_x = it->x0;
-	min_y = max_y = it->y0;
+	min_x = min_y = HUGE_VAL;
+	max_x = max_y = -HUGE_VAL;
 	for (auto & pc : data_) {
-	  if (pc.x0 < min_x) min_x = pc.x0;
-	  if (pc.y0 < min_y) min_y = pc.x0;
-	  if (pc.x0 < max_x) max_x = pc.y0;
-	  if (pc.y0 < max_y) max_y = pc.y0;
+	  if (pc.type == PathComponent::CLOSE) continue;
+	  // An arc is bounded by its whole circle.
+	  double r = pc.type == PathComponent::ARC ? pc.radius : 0.0;
+	  if (pc.x0 - r < min_x) min_x = pc.x0 - r;
+	  if (pc.y0 - r < min_y) min_y = pc.y0 - r;
+	  if (pc.x0 + r > max_x) max_x = pc.x0 + r;
+	  if (pc.y0 + r > max_y) max_y = pc.y0 + r;
 	}
       }
     }
@@ -107,6 +114,7 @@ namespace canvas {
 	new_path.data_.push_back(std::move(pc));
       }
       new_path.current_point_ = matrix.multiply(current_point_);
+      new_path.subpath_start_ = matrix.multiply(subpath_start_);
       return new_path;
     }
 
@@ -133,12 +141,14 @@ namespace canvas {
 	  new_path.data_.push_back(std::move(pc));
 	}
       }
+      new_path.current_point_ = current_point_;
+      new_path.subpath_start_ = subpath_start_;
       return new_path;
     }
     
   private:
     std::vector<PathComponent> data_;
-    Point current_point_;
+    Point current_point_, subpath_start_;
   };
 };
 

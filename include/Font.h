@@ -28,8 +28,21 @@ namespace canvas {
       style(other.style),
       weight(other.weight),
       decoration(other.decoration),
+      variant(other.variant),
       hinting(other.hinting),
       cleartype(other.cleartype) { }
+
+  Font & operator=(const Font & other) {
+    family = other.family;
+    size = other.size;
+    style = other.style;
+    weight = other.weight;
+    decoration = other.decoration;
+    variant = other.variant;
+    hinting = other.hinting;
+    cleartype = other.cleartype;
+    return *this;
+  }
       
 #if 0
     Font(const std::string & s) { }

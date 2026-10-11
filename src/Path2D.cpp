@@ -6,6 +6,8 @@ using namespace canvas;
 
 void
 Path2D::arc(const Point & p, double radius, double sa, double ea, bool anticlockwise) {
+  // An arc that starts a path also starts its subpath.
+  if (data_.empty()) subpath_start_ = Point(p.x + radius * cos(sa), p.y + radius * sin(sa));
   data_.push_back(PathComponent(PathComponent::ARC, p.x, p.y, radius, sa, ea, anticlockwise));
   current_point_ = Point(p.x + radius * cos(ea), p.y + radius * sin(ea));
 }

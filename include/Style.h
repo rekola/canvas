@@ -44,13 +44,23 @@ namespace canvas {
       return *this;
     }
 
-    GraphicsState & operator()(const std::string & s) {
+    Style & operator=(const Style & other) {
+      color = other.color;
+      p0 = other.p0;
+      p1 = other.p1;
+      type = other.type;
+      colors = other.colors;
+      filter = other.filter;
+      return *this;
+    }
+
+    Context & operator()(const std::string & s) {
       color = s;
       type = SOLID;
       return getContext();
     }
     
-    GraphicsState & operator()(const Color & _color) {
+    Context & operator()(const Color & _color) {
       color = _color;
       type = SOLID;
       return getContext();

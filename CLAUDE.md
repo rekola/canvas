@@ -49,6 +49,14 @@ without a backend. Add a pixel test with every behaviour change.
   little-endian); loaded from a file it is straight RGBA. State the format
   whenever an API hands out pixels: clients (the terminal's Sixel and Kitty
   output, the sub-cell quantizer) read it directly.
+- **State follows HTML5 too.** `save()`/`restore()` cover the drawing
+  state (styles, transform, clip, line settings) but not the current path.
+  Every setter, transform and path call returns `Context&`, so calls
+  chain. Assigning one attribute to another copies its value, never its
+  owner.
+- **Gradients are values.** `createLinearGradient()` returns a new `Style`
+  each call; add its stops before assigning it to a style (in HTML5 a
+  `CanvasGradient` is shared, so later stops would still apply).
 - **Text is basic.** Cairo's text path has no shaping or font fallback, so
   clients keep labels outside canvas.
 - Colour strings: `#rgb`/`#rrggbb` and `black`/`white` only; `rgba(...)`
