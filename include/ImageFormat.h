@@ -1,5 +1,5 @@
-#ifndef _IMAGEFORMAT_H_
-#define _IMAGEFORMAT_H_
+#ifndef _CANVAS_IMAGEFORMAT_H_
+#define _CANVAS_IMAGEFORMAT_H_
 
 #define RGBA_TO_RED(v) (v & 0xff)
 #define RGBA_TO_GREEN(v) ((v >> 8) & 0xff)

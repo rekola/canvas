@@ -1,5 +1,5 @@
-#ifndef _PERLINSURFACE_H_
-#define _PERLINSURFACE_H_
+#ifndef _CANVAS_PERLINSURFACE_H_
+#define _CANVAS_PERLINSURFACE_H_
 
 #include "Surface.h"
 

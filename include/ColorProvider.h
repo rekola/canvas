@@ -1,5 +1,5 @@
-#ifndef _COLORPROVIDER_H_
-#define _COLORPROVIDER_H_
+#ifndef _CANVAS_COLORPROVIDER_H_
+#define _CANVAS_COLORPROVIDER_H_
 
 #include <Color.h>
 

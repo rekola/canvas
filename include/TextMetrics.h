@@ -1,5 +1,5 @@
-#ifndef _TEXTMETRICS_H_
-#define _TEXTMETRICS_H_
+#ifndef _CANVAS_TEXTMETRICS_H_
+#define _CANVAS_TEXTMETRICS_H_
 
 namespace canvas {
   class TextMetrics {

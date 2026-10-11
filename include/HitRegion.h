@@ -1,5 +1,5 @@
-#ifndef _HITREGION_H_
-#define _HITREGION_H_
+#ifndef _CANVAS_HITREGION_H_
+#define _CANVAS_HITREGION_H_
 
 #include "Path2D.h"
 

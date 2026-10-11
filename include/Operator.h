@@ -1,5 +1,5 @@
-#ifndef _OPERATOR_H_
-#define _OPERATOR_H_
+#ifndef _CANVAS_OPERATOR_H_
+#define _CANVAS_OPERATOR_H_
 
 namespace canvas {
   enum class Operator {

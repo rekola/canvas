@@ -1,5 +1,5 @@
-#ifndef _FILTER_H_
-#define _FILTER_H_
+#ifndef _CANVAS_FILTER_H_
+#define _CANVAS_FILTER_H_
 
 class Filter {
  public:
