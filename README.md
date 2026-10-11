@@ -10,9 +10,19 @@ On Windows, rendering is done using GDI+, Cairo is used on Linux, Quartz2D is us
 Fluent Style
 ============
 
-Fluent programming style is supported in this implementation, even though it's not available in the original HTML5 Canvas:
+Fluent programming style is supported in this implementation, even though it's not available in the original HTML5 Canvas: setters, transforms and path calls all return the context.
 
-    context->strokeStyle("#ff0000").moveTo(10, 10).lineTo(20, 20).stroke();
+    context->strokeStyle("#ff0000").lineWidth(2.0f).translate(5, 5).beginPath().moveTo(10, 10).lineTo(20, 20).stroke();
+
+Gradients
+=========
+
+`createLinearGradient()` returns a new gradient each time. Unlike HTML5's `CanvasGradient` it is a value, so add the colour stops before assigning it:
+
+    auto gradient = context->createLinearGradient(0, 0, 100, 0);
+    gradient.addColorStop(0.0f, "#000000");
+    gradient.addColorStop(1.0f, "#ffffff");
+    context->fillStyle = gradient;
 
 Example
 =======

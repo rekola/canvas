@@ -76,7 +76,7 @@ int main() {
   }
   {  // A linear gradient runs monotonically between its stops.
     ContextCairo ctx(16, 2);
-    auto & g = ctx.createLinearGradient(0, 0, 16, 0);
+    auto g = ctx.createLinearGradient(0, 0, 16, 0);
     g.addColorStop(0.0f, "#000000");
     g.addColorStop(1.0f, "#ffffff");
     ctx.fillStyle = g;
@@ -98,6 +98,45 @@ int main() {
       }
     CHECK(pixel(ctx, 3, 4).a == 0 && pixel(ctx, 6, 5).a == 0);
     CHECK(pixel(ctx, 1, 1).a == 0);
+  }
+  {  // Each gradient is its own: a second one doesn't change the first.
+    ContextCairo ctx(16, 2);
+    auto g1 = ctx.createLinearGradient(0, 0, 16, 0);
+    g1.addColorStop(0.0f, "#ff0000");
+    g1.addColorStop(1.0f, "#ff0000");
+    auto g2 = ctx.createLinearGradient(0, 0, 16, 0);
+    g2.addColorStop(0.0f, "#0000ff");
+    g2.addColorStop(1.0f, "#0000ff");
+    CHECK(g1.getColors().size() == 2 && g2.getColors().size() == 2);
+    ctx.fillStyle = g1;
+    ctx.fillRect(0, 0, 16, 2);
+    Px p = pixel(ctx, 8, 1);
+    CHECK(p.r == 255 && p.b == 0);
+  }
+  {  // The current path survives restore(); the drawing state doesn't.
+    ContextCairo ctx(8, 8);
+    ctx.beginPath();
+    ctx.save();
+    ctx.fillStyle = "#00ff00";
+    ctx.rect(0, 0, 8, 8);
+    ctx.restore();
+    ctx.fill();
+    Px p = pixel(ctx, 4, 4);
+    CHECK(p.a == 255 && p.g == 0);
+  }
+  {  // Setters and transforms chain into path calls.
+    ContextCairo ctx(8, 8);
+    ctx.fillStyle("#0000ff").translate(2, 2).beginPath().rect(0, 0, 2, 2).fill();
+    CHECK(pixel(ctx, 3, 3).b == 255 && pixel(ctx, 1, 1).a == 0);
+    ctx.lineWidth(2.0f).strokeStyle(Color(1.0f, 0.0f, 0.0f, 1.0f)).resetTransform().beginPath().moveTo(0, 7).lineTo(8, 7).stroke();
+    CHECK(pixel(ctx, 4, 7).r == 255);
+  }
+  {  // Assigning a style from another context keeps the owner.
+    ContextCairo a(4, 4), b(4, 4);
+    b.fillStyle = "#ff0000";
+    a.fillStyle = b.fillStyle;
+    a.fillStyle("#00ff00").fillRect(0, 0, 4, 4);
+    CHECK(pixel(a, 1, 1).g == 255 && pixel(b, 1, 1).a == 0);
   }
   return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

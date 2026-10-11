@@ -15,8 +15,7 @@ namespace canvas {
   class Context : public GraphicsState {
   public:
     Context(float display_scale = 1.0f)
-      : display_scale_(display_scale),
-      current_linear_gradient_(this)
+      : display_scale_(display_scale)
       { }
     Context(const Context & other) = delete;
     Context & operator=(const Context & other) = delete;
@@ -47,13 +46,29 @@ namespace canvas {
       restore_stack_.push_back(*this);
       return *this;
     }
+    // The current path is not part of the drawing state (HTML5), so it
+    // survives restore().
     Context & restore() {
       if (!restore_stack_.empty()) {
+	auto path = std::move(currentPath);
 	*this = restore_stack_.back();
+	currentPath = std::move(path);
 	restore_stack_.pop_back();    
       }
       return *this;
     }
+
+    // GraphicsState's, returning Context& so calls chain.
+    Context & clip() { GraphicsState::clip(); return *this; }
+    Context & resetClip() { GraphicsState::resetClip(); return *this; }
+    Context & scale(double x, double y) { GraphicsState::scale(x, y); return *this; }
+    Context & rotate(double angle) { GraphicsState::rotate(angle); return *this; }
+    Context & translate(double x, double y) { GraphicsState::translate(x, y); return *this; }
+    Context & transform(double a, double b, double c, double d, double e, double f) { GraphicsState::transform(a, b, c, d, e, f); return *this; }
+    Context & transform(const TransformationMatrix & m) { GraphicsState::transform(m); return *this; }
+    Context & setTransform(double a, double b, double c, double d, double e, double f) { GraphicsState::setTransform(a, b, c, d, e, f); return *this; }
+    Context & setTransform(const TransformationMatrix & m) { GraphicsState::setTransform(m); return *this; }
+    Context & resetTransform() { GraphicsState::resetTransform(); return *this; }
     
     bool isPointInPath(const Path2D & path, double x, double y) { return false; }
     
@@ -161,10 +176,13 @@ namespace canvas {
       return *this;
     }
         
-    Style & createLinearGradient(double x0, double y0, double x1, double y1) {
-      current_linear_gradient_.setType(Style::LINEAR_GRADIENT);
-      current_linear_gradient_.setVector(x0, y0, x1, y1);
-      return current_linear_gradient_;
+    // A new gradient each call. Unlike HTML5's CanvasGradient it is a
+    // value: add its stops before assigning it to fillStyle/strokeStyle.
+    Style createLinearGradient(double x0, double y0, double x1, double y1) {
+      Style gradient(this);
+      gradient.setType(Style::LINEAR_GRADIENT);
+      gradient.setVector(x0, y0, x1, y1);
+      return gradient;
     }
 
     float getDisplayScale() const { return display_scale_; }
@@ -281,13 +299,14 @@ namespace canvas {
     
   private:
     float display_scale_;
-    Style current_linear_gradient_;
     std::vector<GraphicsState> restore_stack_;
     std::vector<HitRegion> hit_regions_;
 
     static inline HitRegion null_region;
   };
     
+  inline Context & AttributeBase::getContext() { return static_cast<Context &>(*context); }
+
   class ContextFactory {
   public:
     ContextFactory(float display_scale) : display_scale_(display_scale) { }
