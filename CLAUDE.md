@@ -23,7 +23,8 @@ is `canvas::canvas`. `src/PerlinSurface.cpp` is stale (does not compile) and
 is not in the build.
 
 Tests are plain `main()` programs in `tests/` that draw and read pixels back
-(`tests/pixel_tests.cpp`). Add a pixel test with every behaviour change.
+(`tests/pixel_tests.cpp`); `tests/imagedata_tests.cpp` covers `ImageData`
+without a backend. Add a pixel test with every behaviour change.
 
 ## Layout
 
@@ -53,11 +54,11 @@ Tests are plain `main()` programs in `tests/` that draw and read pixels back
 
 ## Known gaps
 
-- Gaussian blur ignores premultiplied alpha (see `TODO.md`).
 - DXT/ETC1 texture compression is compiled in because `Surface.h` includes
   `PackedImageData` inline; making it optional needs a small refactor.
-- No GDI+ or Linux CI yet; the GDI+ backend has not been built since the
-  CMake build was added. Its clipping is per-pixel and unantialiased.
+- GDI+ is only compile-checked in CI (`ci-windows.yml`, MSYS2 UCRT64);
+  the pixel tests are Cairo-only. Its clipping is per-pixel and
+  unantialiased.
 
 ## Conventions
 

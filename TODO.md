@@ -1,8 +1,6 @@
 TODO
 ====
 
-Buffers have premultiplied alpha, and currently gaussianBlur ignores the fact.
-
 Layers
 ------
 
