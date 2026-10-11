@@ -138,5 +138,52 @@ int main() {
     a.fillStyle("#00ff00").fillRect(0, 0, 4, 4);
     CHECK(pixel(a, 1, 1).g == 255 && pixel(b, 1, 1).a == 0);
   }
+  {  // Points are transformed when added: a path built across translate().
+    ContextCairo ctx(16, 16);
+    ctx.fillStyle = "#ff0000";
+    ctx.beginPath().rect(0, 0, 2, 2).translate(8, 8).rect(0, 0, 2, 2).fill();
+    CHECK(pixel(ctx, 1, 1).r == 255 && pixel(ctx, 9, 9).r == 255);
+    CHECK(pixel(ctx, 5, 5).a == 0 && pixel(ctx, 1, 9).a == 0);
+  }
+  {  // Line width is the matrix's scale, not its `a`: rotated by 90 degrees it still draws.
+    ContextCairo ctx(8, 8);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2.0f;
+    ctx.rotate(M_PI / 2);
+    ctx.beginPath().moveTo(0, -4).lineTo(8, -4).stroke();  // x = 4 on the canvas, 2 px wide
+    CHECK(pixel(ctx, 3, 4).a > 200 && pixel(ctx, 4, 4).a > 200 && pixel(ctx, 1, 4).a == 0);
+  }
+  {  // Arcs follow rotation: a half circle under rotate(PI) lands below the centre.
+    ContextCairo ctx(16, 16);
+    ctx.fillStyle = "#ffffff";
+    ctx.translate(8, 8).rotate(M_PI);
+    ctx.beginPath().arc(0, 0, 6, M_PI, 2 * M_PI, false).fill();  // upper half in user space
+    CHECK(pixel(ctx, 8, 11).a == 255 && pixel(ctx, 8, 5).a == 0);
+  }
+  {  // clip() uses the transform in force and intersects with the previous clip.
+    ContextCairo ctx(16, 16);
+    ctx.fillStyle = "#ffffff";
+    ctx.save();
+    ctx.translate(4, 4).beginPath().rect(0, 0, 8, 8).clip();
+    ctx.beginPath().rect(4, 4, 12, 12).clip();  // intersects: device (8..12, 8..12)
+    ctx.resetTransform().fillRect(0, 0, 16, 16);
+    CHECK(pixel(ctx, 10, 10).a == 255 && pixel(ctx, 6, 6).a == 0 && pixel(ctx, 13, 13).a == 0 && pixel(ctx, 2, 2).a == 0);
+    ctx.restore();
+    ctx.fillRect(0, 0, 16, 16);
+    CHECK(pixel(ctx, 2, 2).a == 255);
+  }
+  {  // clip() leaves the current path.
+    ContextCairo ctx(8, 8);
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath().rect(0, 0, 4, 8).clip().fill();
+    CHECK(pixel(ctx, 1, 1).a == 255 && pixel(ctx, 6, 1).a == 0);
+  }
+  {  // isPointInPath() takes device coordinates, with the path in user space.
+    ContextCairo ctx(16, 16);
+    Path2D path;
+    path.rect(0, 0, 4, 4);
+    ctx.translate(8, 8);
+    CHECK(ctx.isPointInPath(path, 9, 9) && !ctx.isPointInPath(path, 2, 2));
+  }
   return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

@@ -52,7 +52,10 @@ without a backend. Add a pixel test with every behaviour change.
 - **State follows HTML5 too.** `save()`/`restore()` cover the drawing
   state (styles, transform, clip, line settings) but not the current path.
   Every setter, transform and path call returns `Context&`, so calls
-  chain. Assigning one attribute to another copies its value, never its
+  chain. Path points are transformed as they are added (`currentPath` is
+  in device coordinates); a `Path2D` passed to `fill(path)` is in user
+  coordinates. `clip()` intersects with the existing clip and keeps the
+  path. Assigning one attribute to another copies its value, never its
   owner.
 - **Gradients are values.** `createLinearGradient()` returns a new `Style`
   each call; add its stops before assigning it to a style (in HTML5 a
@@ -63,6 +66,9 @@ without a backend. Add a pixel test with every behaviour change.
   is not implemented (it asserts). Use `Color(r, g, b, a)`.
 
 ## Known gaps
+
+- Intersecting clips works on flattened polygons and needs one of each
+  pair convex (rectangles, circles); two concave clips replace instead.
 
 - GDI+ is only compile-checked in CI (`ci-windows.yml`, MSYS2 UCRT64);
   the pixel tests are Cairo-only. Its clipping is per-pixel and

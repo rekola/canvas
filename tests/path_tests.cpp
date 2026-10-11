@@ -63,5 +63,54 @@ int main() {
     path.closePath();
     CHECK(at(path.getCurrentPoint(), 11, 22));
   }
+  {  // isInside(): subpaths close on their own start, and a moveTo isn't an edge.
+    Path2D path;
+    path.rect(0, 0, 4, 4);
+    path.rect(10, 10, 4, 4);
+    CHECK(path.isInside(2, 2) && path.isInside(12, 12));
+    CHECK(!path.isInside(7, 7) && !path.isInside(2, 12) && !path.isInside(12, 2));
+  }
+  {  // isInside() sees arcs.
+    Path2D path;
+    path.arc(Point(10, 10), 5, 0, 2 * M_PI, false);
+    CHECK(path.isInside(10, 10) && path.isInside(13, 13) && !path.isInside(15, 15));
+  }
+  {  // A similarity keeps an arc: the scaled, rotated centre and swept angles.
+    Path2D path;
+    path.arc(Point(1, 0), 2, 0, M_PI / 2, false);
+    TransformationMatrix m(0, 2, -2, 0, 5, 5);  // rotate 90 degrees, scale 2, translate
+    auto t = path.transform(m);
+    auto & pc = t.getData()[0];
+    CHECK(pc.type == PathComponent::ARC);
+    CHECK(std::abs(pc.x0 - 5) < 1e-9 && std::abs(pc.y0 - 7) < 1e-9 && std::abs(pc.radius - 4) < 1e-9);
+    CHECK(std::abs(pc.sa - M_PI / 2) < 1e-9 && std::abs(pc.ea - M_PI) < 1e-9 && !pc.anticlockwise);
+  }
+  {  // A mirror flips the arc's direction.
+    Path2D path;
+    path.arc(Point(0, 0), 1, 0, M_PI / 2, false);
+    auto t = path.transform(TransformationMatrix(-1, 0, 0, 1, 0, 0));
+    auto & pc = t.getData()[0];
+    CHECK(pc.anticlockwise && std::abs(pc.sa - M_PI) < 1e-9 && std::abs(pc.ea - M_PI / 2) < 1e-9);
+  }
+  {  // A non-uniform scale flattens an arc into the ellipse's points.
+    Path2D path;
+    path.arc(Point(0, 0), 1, 0, 2 * M_PI, false);
+    auto t = path.transform(TransformationMatrix(4, 0, 0, 1, 0, 0));
+    CHECK(t.getData()[0].type == PathComponent::MOVE_TO);
+    double x0, y0, x1, y1;
+    t.getExtents(x0, y0, x1, y1);
+    CHECK(std::abs(x1 - 4) < 1e-9 && std::abs(y1 - 1) < 1e-9);
+  }
+  {  // Clips intersect; disjoint clips leave nothing visible but are not "no clip".
+    Path2D a, b;
+    a.rect(0, 0, 10, 10);
+    b.rect(5, 5, 10, 10);
+    CHECK(a.intersect(b));
+    CHECK(a.isInside(7, 7) && !a.isInside(2, 2) && !a.isInside(12, 12));
+    Path2D c;
+    c.rect(20, 20, 2, 2);
+    CHECK(a.intersect(c));
+    CHECK(!a.empty() && !a.isInside(21, 21) && !a.isInside(7, 7));
+  }
   return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }
