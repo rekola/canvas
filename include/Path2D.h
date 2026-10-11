@@ -5,6 +5,7 @@
 #include <TransformationMatrix.h>
 
 #include <cmath>
+#include <cstddef>
 #include <vector>
 
 namespace canvas {
@@ -100,52 +101,27 @@ namespace canvas {
     bool isInside(double x, double y) const;
     std::size_t size() const { return data_.size(); }
 
-    Path2D transform(const TransformationMatrix & matrix) const {
-      Path2D new_path;
-      for (auto pc : data_) {
-	auto p = matrix.multiply(pc.x0, pc.y0);
-	pc.x0 = p.x;
-	pc.y0 = p.y;
-#if 0
-	pc.sa = matrix.transformAngle(pc.sa);
-	pc.ea = matrix.transformAngle(pc.ea);
-#endif
-	pc.radius = matrix.transformSize(pc.radius);
-	new_path.data_.push_back(std::move(pc));
-      }
-      new_path.current_point_ = matrix.multiply(current_point_);
-      new_path.subpath_start_ = matrix.multiply(subpath_start_);
-      return new_path;
-    }
+    // Points are transformed; an arc stays an arc when the matrix is a
+    // rotation, uniform scale and mirror (its angles are transformed
+    // too), otherwise it is flattened first.
+    Path2D transform(const TransformationMatrix & matrix) const;
 
-    Path2D flatten() const {
-      Path2D new_path;
-      for (auto pc : data_) {
-	if (pc.type == PathComponent::ARC) {
-	  double ea = pc.ea, step;
-	  if (pc.anticlockwise) {
-	    while (ea > pc.sa) ea -= 2*M_PI;
-	    step = (ea - pc.sa) / 64.0;
-	  } else {
-	    while (ea < pc.sa) ea += 2*M_PI;
-	    step = (ea - pc.sa) / 64.0;
-	  }
-	  double a = pc.sa;
-	  for (int i = 0; i <= 64; i++, a += step) {
-	    auto x = pc.x0 + cos(a) * pc.radius;
-	    auto y = pc.y0 + sin(a) * pc.radius;
-	    if (i == 0) new_path.moveTo(x, y);
-	    else new_path.lineTo(x, y);
-	  }
-	} else {
-	  new_path.data_.push_back(std::move(pc));
-	}
-      }
-      new_path.current_point_ = current_point_;
-      new_path.subpath_start_ = subpath_start_;
-      return new_path;
-    }
-    
+    // Arcs become line segments. An arc that follows other segments is
+    // joined to them by a line, as in HTML5.
+    Path2D flatten() const;
+
+    // Adds the components of other, from index first. With join set, a
+    // leading moveTo becomes a lineTo so other continues this path.
+    void append(const Path2D & other, size_t first = 0, bool join = false);
+
+    // Replaces this (a clip region) with its intersection with other.
+    // Both are flattened and treated as unions of closed polygons; one of
+    // each pair of polygons must be convex. Returns false and leaves this
+    // as it was if that doesn't hold. An empty intersection leaves a
+    // single moveTo, which clips everything out (an empty path is "no
+    // clip").
+    bool intersect(const Path2D & other);
+
   private:
     std::vector<PathComponent> data_;
     Point current_point_, subpath_start_;

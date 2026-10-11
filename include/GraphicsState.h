@@ -27,9 +27,12 @@ namespace canvas {
       imageSmoothingEnabled(this, true)
       { }
 
+    // currentPath is in device coordinates (points are transformed as
+    // they are added), so the clip is too. It intersects the existing
+    // clip and leaves the path alone, as in HTML5. Two concave clips
+    // can't be intersected as polygons; the new one then replaces the old.
     GraphicsState & clip() {
-      clipPath = currentPath;
-      currentPath.clear();
+      if (clipPath.empty() || !clipPath.intersect(currentPath)) clipPath = currentPath;
       return *this;
     }
     GraphicsState & resetClip() { clipPath.clear(); return *this; }
@@ -74,7 +77,8 @@ namespace canvas {
     TextBaselineAttribute textBaseline;
     TextAlignAttribute textAlign;
     Attribute<bool> imageSmoothingEnabled;
-    Path2D currentPath, clipPath;
+    Path2D currentPath; // device coordinates
+    Path2D clipPath; // device coordinates
     TransformationMatrix currentTransform;
 
   protected:

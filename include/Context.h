@@ -38,10 +38,12 @@ namespace canvas {
       hit_regions_.clear();
     }
         
+    // The current path is in device coordinates already; a Path2D passed
+    // in is in user coordinates and gets the current transform.
     Context & stroke() { return renderPath(RenderMode::STROKE, currentPath, strokeStyle); }
-    Context & stroke(const Path2D & path) { return renderPath(RenderMode::STROKE, path, strokeStyle); }
+    Context & stroke(const Path2D & path) { return renderPath(RenderMode::STROKE, path.transform(currentTransform), strokeStyle); }
     Context & fill() { return renderPath(RenderMode::FILL, currentPath, fillStyle); }
-    Context & fill(const Path2D & path) { return renderPath(RenderMode::FILL, path, fillStyle); }
+    Context & fill(const Path2D & path) { return renderPath(RenderMode::FILL, path.transform(currentTransform), fillStyle); }
     Context & save() {
       restore_stack_.push_back(*this);
       return *this;
@@ -70,17 +72,37 @@ namespace canvas {
     Context & setTransform(const TransformationMatrix & m) { GraphicsState::setTransform(m); return *this; }
     Context & resetTransform() { GraphicsState::resetTransform(); return *this; }
     
-    bool isPointInPath(const Path2D & path, double x, double y) { return false; }
+    // x and y are device coordinates, the path is in user coordinates.
+    bool isPointInPath(const Path2D & path, double x, double y) { return path.transform(currentTransform).isInside(x, y); }
+    bool isPointInPath(double x, double y) { return currentPath.isInside(x, y); }
     
     TextMetrics measureText(const std::string & text) {
       return getDefaultSurface().measureText(font, text, textBaseline.get(), getDisplayScale());
     }
 
-    Context & moveTo(double x, double y) { currentPath.moveTo(x, y); return *this; }
-    Context & lineTo(double x, double y) { currentPath.lineTo(x, y); return *this; }
-    Context & arcTo(double x1, double y1, double x2, double y2, double radius) { currentPath.arcTo(Point(x1, y1), Point(x2, y2), radius); return *this; }
+    // Points are transformed when they are added (HTML5).
+    Context & moveTo(double x, double y) { currentPath.moveTo(currentTransform.multiply(x, y)); return *this; }
+    Context & lineTo(double x, double y) { currentPath.lineTo(currentTransform.multiply(x, y)); return *this; }
+    Context & arcTo(double x1, double y1, double x2, double y2, double radius) {
+      TransformationMatrix inverse;
+      if (currentPath.empty()) {
+	moveTo(x1, y1);
+      } else if (currentTransform.invert(inverse)) {
+	// The corner is worked out in user space from the current point.
+	Path2D path;
+	path.moveTo(inverse.multiply(currentPath.getCurrentPoint()));
+	path.arcTo(Point(x1, y1), Point(x2, y2), radius);
+	currentPath.append(path.transform(currentTransform), 1);
+      }
+      return *this;
+    }
 
-    Context & arc(double x, double y, double r, double a0, double a1, bool t = false) { currentPath.arc(Point(x, y), r, a0, a1, t); return *this; }
+    Context & arc(double x, double y, double r, double a0, double a1, bool t = false) {
+      Path2D path;
+      path.arc(Point(x, y), r, a0, a1, t);
+      currentPath.append(path.transform(currentTransform), 0, true);
+      return *this;
+    }
 
     Context & fillRect(double x, double y, double w, double h) {
       Path2D path;
@@ -99,11 +121,13 @@ namespace canvas {
       path.rect(x, y, w, h);
       Style style(this);
       style = Color(0.0f, 0.0f, 0.0f, 0.0f);
-      return renderPath(RenderMode::FILL, path, style, Operator::COPY);
+      return renderPath(RenderMode::FILL, path.transform(currentTransform), style, Operator::COPY);
     }
 
     Context & rect(double x, double y, double w, double h) {
-      currentPath.rect(x, y, w, h);
+      Path2D path;
+      path.rect(x, y, w, h);
+      currentPath.append(path.transform(currentTransform));
       return *this;
     }
 
@@ -133,8 +157,8 @@ namespace canvas {
     
     virtual Context & drawImage(const ImageData & img, double x, double y, double w0, double h0) {
       auto p = currentTransform.multiply(x, y);
-      auto w = currentTransform.transformSize(w0);
-      auto h = currentTransform.transformSize(h0);
+      auto w = w0 * currentTransform.scaleX();
+      auto h = h0 * currentTransform.scaleY();
       if (hasNativeShadows()) {
 	getDefaultSurface().drawImage(img, p, w, h, getDisplayScale(), globalAlpha.get(), shadowBlur.get(), shadowOffsetX.get(), shadowOffsetY.get(), shadowColor.get(), clipPath, imageSmoothingEnabled.get());
       } else {
@@ -155,8 +179,8 @@ namespace canvas {
     
     virtual Context & drawImage(Surface & img, double x, double y, double w0, double h0) {
       auto p = currentTransform.multiply(x, y);
-      auto w = currentTransform.transformSize(w0);
-      auto h = currentTransform.transformSize(h0);
+      auto w = w0 * currentTransform.scaleX();
+      auto h = h0 * currentTransform.scaleY();
       if (hasNativeShadows()) {
 	getDefaultSurface().drawImage(img, p, w, h, getDisplayScale(), globalAlpha.get(), shadowBlur.get(), shadowOffsetX.get(), shadowOffsetY.get(), shadowColor.get(), clipPath, imageSmoothingEnabled.get());
       } else {
@@ -188,14 +212,14 @@ namespace canvas {
     float getDisplayScale() const { return display_scale_; }
     Context & addHitRegion(std::string id, std::string cursor = "") {
       if (!currentPath.empty()) {
-	auto path = currentPath.flatten().transform(currentTransform);
+	auto path = currentPath.flatten();
 	hit_regions_.push_back(HitRegion(std::move(id), std::move(path), std::move(cursor)));
       }
       return *this;
     }
     Context & addHitRegion(HitRegion hit_region) {
       if (!currentPath.empty()) {
-	auto path = currentPath.flatten().transform(currentTransform);
+	auto path = currentPath.flatten();
 	hit_region.setPath(std::move(path));
 	hit_regions_.push_back(std::move(hit_region));
       }
@@ -220,10 +244,10 @@ namespace canvas {
 #endif
     
   protected:
-    Context & renderPath(RenderMode mode, const Path2D & path0, const Style & style0, Operator op = Operator::SOURCE_OVER) {
+    // The path is in device coordinates.
+    Context & renderPath(RenderMode mode, const Path2D & path, const Style & style0, Operator op = Operator::SOURCE_OVER) {
       auto scaled_lineWidth = currentTransform.transformSize(lineWidth.get(), true);
       if (mode != RenderMode::STROKE || scaled_lineWidth > 0.1f) {
-	auto path = path0.transform(currentTransform);
 	auto style = style0.transform(currentTransform);
 	
 	if (hasNativeShadows()) {
