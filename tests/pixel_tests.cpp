@@ -12,6 +12,7 @@ namespace canvas { typedef ContextGDIPlus TestContext; typedef GDIPlusContextFac
 #endif
 
 #include <cstdio>
+#include <exception>
 #include <cstdlib>
 
 using namespace canvas;
@@ -31,7 +32,19 @@ static Px pixel(Context & ctx, unsigned x, unsigned y) {
 
 static bool close_to(int a, int b, int tol = 2) { return std::abs(a - b) <= tol; }
 
+// Opens a file whose name is UTF-8 (the Windows fopen() would read it as ANSI).
+static FILE * openUtf8(const char * path) {
+#ifdef _WIN32
+  wchar_t wide[256];
+  if (!MultiByteToWideChar(CP_UTF8, 0, path, -1, wide, 256)) return nullptr;
+  return _wfopen(wide, L"wb");
+#else
+  return std::fopen(path, "wb");
+#endif
+}
+
 int main() {
+  std::setvbuf(stdout, nullptr, _IONBF, 0);  // keep failures visible if a test crashes
 #if defined(CANVAS_HAS_GDIPLUS) && !defined(CANVAS_HAS_CAIRO)
   ContextGDIPlus::initialize();
 #endif
@@ -172,7 +185,7 @@ int main() {
   {  // loadImage() asks the factory's converter for the path, and the name
      // may be UTF-8.
     const char * path = "canvas_test_\xc3\xa4.ppm";
-    FILE * f = std::fopen(path, "wb");
+    FILE * f = openUtf8(path);
     CHECK(f != nullptr);
     if (f) {
       std::fputs("P6\n1 1\n255\n", f);
@@ -182,13 +195,24 @@ int main() {
 	bool convert(const std::string & in, std::string & out) override { out = in == "icon" ? "canvas_test_\xc3\xa4.ppm" : in; return true; }
       } converter;
       TestFactory factory(1.0f, &converter);
-      auto image = factory.loadImage("icon");
-      const ImageData & d = image->getData();
-      CHECK(d.getWidth() == 1 && d.getNumChannels() == 3 && d.getData()[1] == 255);
-      TestContext ctx(1, 1);
-      ctx.drawImage(d, 0, 0, 1, 1);
-      CHECK(pixel(ctx, 0, 0).g == 255 && pixel(ctx, 0, 0).r == 0);
+      try {
+	auto image = factory.loadImage("icon");
+	const ImageData & d = image->getData();
+	CHECK(d.getWidth() == 1 && d.getNumChannels() == 3 && d.getData()[1] == 255);
+	TestContext ctx(1, 1);
+	ctx.drawImage(d, 0, 0, 1, 1);
+	CHECK(pixel(ctx, 0, 0).g == 255 && pixel(ctx, 0, 0).r == 0);
+      } catch (const std::exception & e) {
+	std::printf("loading failed: %s\n", e.what());
+	failures++;
+      }
+#ifdef _WIN32
+      wchar_t wide[256];
+      MultiByteToWideChar(CP_UTF8, 0, path, -1, wide, 256);
+      _wremove(wide);
+#else
       std::remove(path);
+#endif
     }
   }
   {  // Each gradient is its own: a second one doesn't change the first.
