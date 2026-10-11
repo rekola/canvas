@@ -30,6 +30,9 @@ int main() {
     Px in = pixel(ctx, 3, 3), out = pixel(ctx, 0, 0);
     CHECK(in.r == 255 && in.g == 0 && in.b == 0 && in.a == 255);
     CHECK(out.a == 0 && out.r == 0);
+    // Integer coordinates are pixel edges, as in HTML5 canvas.
+    CHECK(pixel(ctx, 2, 2).a == 255 && pixel(ctx, 5, 5).a == 255);
+    CHECK(pixel(ctx, 1, 2).a == 0 && pixel(ctx, 6, 5).a == 0 && pixel(ctx, 2, 1).a == 0 && pixel(ctx, 5, 6).a == 0);
   }
   {  // Premultiplied alpha: 50% white is stored as 128 in every channel.
     ContextCairo ctx(4, 4);
@@ -52,6 +55,16 @@ int main() {
     CHECK(partial);
     CHECK(pixel(ctx, 15, 0).a == 0);
   }
+  {  // A 1 px line on an integer coordinate straddles two rows at half
+     // coverage; on a .5 coordinate it is one crisp row (HTML5 canvas).
+    ContextCairo ctx(8, 8);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1.0f;
+    ctx.beginPath().moveTo(0, 2).lineTo(8, 2).stroke();
+    ctx.beginPath().moveTo(0, 5.5).lineTo(8, 5.5).stroke();
+    CHECK(near(pixel(ctx, 4, 1).a, 128) && near(pixel(ctx, 4, 2).a, 128));
+    CHECK(pixel(ctx, 4, 5).a == 255 && pixel(ctx, 4, 4).a == 0 && pixel(ctx, 4, 6).a == 0);
+  }
   {  // A polyline covers each of its segments.
     ContextCairo ctx(16, 16);
     ctx.strokeStyle = "#00ff00";
@@ -68,8 +81,7 @@ int main() {
     g.addColorStop(1.0f, "#ffffff");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, 16, 2);
-    // Row 1: paths are offset by half a pixel, so row 0 is half covered.
-    Px a = pixel(ctx, 1, 1), b = pixel(ctx, 8, 1), c = pixel(ctx, 14, 1);
+    Px a = pixel(ctx, 1, 0), b = pixel(ctx, 8, 0), c = pixel(ctx, 14, 0);
     CHECK(a.r < b.r && b.r < c.r);
     CHECK(a.r < 40 && c.r > 215);
   }
@@ -79,9 +91,12 @@ int main() {
     for (int i = 0; i < 4; i++) { rgba[4 * i] = 0; rgba[4 * i + 1] = 0; rgba[4 * i + 2] = 255; rgba[4 * i + 3] = 255; }
     ImageData img(rgba, 2, 2, 4);
     ctx.drawImage(img, 4, 4, 2, 2);
-    // Images are drawn half a pixel off too, so only the middle is exact.
-    Px in = pixel(ctx, 5, 5);
-    CHECK(in.a == 255 && in.r == 255 && in.g == 0);
+    for (unsigned y = 4; y < 6; y++)
+      for (unsigned x = 4; x < 6; x++) {
+        Px in = pixel(ctx, x, y);
+        CHECK(in.a == 255 && in.r == 255 && in.g == 0);
+      }
+    CHECK(pixel(ctx, 3, 4).a == 0 && pixel(ctx, 6, 5).a == 0);
     CHECK(pixel(ctx, 1, 1).a == 0);
   }
   return failures ? EXIT_FAILURE : EXIT_SUCCESS;

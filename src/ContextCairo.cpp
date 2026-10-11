@@ -114,17 +114,17 @@ CairoSurface::sendPath(const Path2D & path, float displayScale) {
   for (auto pc : path.getData()) {
     switch (pc.type) {
     case PathComponent::MOVE_TO:
-      cairo_move_to(cr, displayScale * pc.x0 + 0.5, displayScale * pc.y0 + 0.5);
+      cairo_move_to(cr, displayScale * pc.x0, displayScale * pc.y0);
       break;
     case PathComponent::LINE_TO:
-      cairo_line_to(cr, displayScale * pc.x0 + 0.5, displayScale * pc.y0 + 0.5);
+      cairo_line_to(cr, displayScale * pc.x0, displayScale * pc.y0);
       break;
     case PathComponent::CLOSE: cairo_close_path(cr); break;
     case PathComponent::ARC:
       if (!pc.anticlockwise) {
-	cairo_arc(cr, displayScale * pc.x0 + 0.5, displayScale * pc.y0 + 0.5, displayScale * pc.radius, pc.sa, pc.ea);
+	cairo_arc(cr, displayScale * pc.x0, displayScale * pc.y0, displayScale * pc.radius, pc.sa, pc.ea);
       } else {
-	cairo_arc_negative(cr, displayScale * pc.x0 + 0.5, displayScale * pc.y0 + 0.5, displayScale * pc.radius, pc.sa, pc.ea);
+	cairo_arc_negative(cr, displayScale * pc.x0, displayScale * pc.y0, displayScale * pc.radius, pc.sa, pc.ea);
       }
       break;
     }
@@ -256,7 +256,7 @@ CairoSurface::renderText(RenderMode mode, const Font & font, const Style & style
     }
   }
   
-  cairo_move_to(cr, x + 0.5, y + 0.5);
+  cairo_move_to(cr, x, y);
   
   switch (mode) {
   case RenderMode::STROKE:
@@ -312,7 +312,7 @@ CairoSurface::drawNativeSurface(CairoSurface & img, const Point & p, double w, d
   double sx = w * displayScale / img.getActualWidth(), sy = h * displayScale / img.getActualHeight();
   cairo_save(cr);
   cairo_scale(cr, sx, sy);
-  cairo_set_source_surface(cr, img.surface, (px / sx) + 0.5, (py / sy) + 0.5);
+  cairo_set_source_surface(cr, img.surface, (px / sx), (py / sy));
   cairo_pattern_set_filter(cairo_get_source(cr), imageSmoothingEnabled ? CAIRO_FILTER_BEST : CAIRO_FILTER_NEAREST);
   if (globalAlpha < 1.0f) {
     cairo_paint_with_alpha(cr, globalAlpha);

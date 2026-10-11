@@ -47,12 +47,13 @@ bottom with no padding. What the bytes mean depends on where it came from:
   order (R, G, B[, A]) with **straight** alpha. `ImageData::multiplyAlpha()`
   converts straight RGBA to premultiplied.
 
-Cairo geometry
-==============
+Geometry
+========
 
-Path coordinates and drawn images are offset by half a pixel, so a 1 px line
-at an integer coordinate is crisp. A fill with integer edges is therefore
-antialiased on its edges, and an image sits half a pixel off.
+As in HTML5 canvas, integer coordinates are pixel edges and pixel centres are
+at .5. A 1 px line on an integer coordinate is antialiased over two rows; put
+it on a .5 coordinate to get one crisp row. Fills with integer edges, and
+images drawn at integer positions and native size, are exact.
 
 Linux
 =====
