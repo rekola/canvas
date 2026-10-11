@@ -7,8 +7,7 @@ on:
 
 jobs:
   # MSYS2 UCRT64 (MinGW-w64 GCC), the toolchain synth's Windows job uses.
-  # Builds the GDI+ backend; the pixel tests are Cairo-only for now, so
-  # this runs the backend-independent ones.
+  # Builds the GDI+ backend and runs the pixel tests on it.
   build-and-test:
     runs-on: windows-2022
 
