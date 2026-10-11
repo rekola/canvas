@@ -248,7 +248,7 @@ GDIPlusSurface::renderPath(RenderMode mode, const TransformationMatrix & transfo
       if (!lineStyle.dash.empty() && width > 0.0f) {
 	// GDI+ measures dashes in pen widths.
 	std::vector<float> dash;
-	for (auto & v : lineStyle.dash) dash.push_back(std::max(0.001f, transformation.transformSize(v) * display_scale / width));
+	for (auto & v : lineStyle.dash) dash.push_back(std::max(0.001f, float(transformation.transformSize(v) * display_scale / width)));
 	pen.SetDashStyle(Gdiplus::DashStyleCustom);
 	pen.SetDashPattern(dash.data(), (INT)dash.size());
 	pen.SetDashOffset(transformation.transformSize(lineStyle.dashOffset) * display_scale / width);
