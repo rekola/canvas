@@ -1,0 +1,38 @@
+name: Windows
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+
+jobs:
+  # MSYS2 UCRT64 (MinGW-w64 GCC), the toolchain synth's Windows job uses.
+  # Builds the GDI+ backend; the pixel tests are Cairo-only for now, so
+  # this runs the backend-independent ones.
+  build-and-test:
+    runs-on: windows-2022
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+
+      - name: Configure
+        run: cmake -G Ninja -B build -DCANVAS_BACKEND_CAIRO=OFF -DCANVAS_BACKEND_GDIPLUS=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
