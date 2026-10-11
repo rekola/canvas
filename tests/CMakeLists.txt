@@ -11,6 +11,9 @@ if(CANVAS_BACKEND_CAIRO)
   target_link_libraries(guard_tests PRIVATE canvas)
   add_test(NAME canvas_guards COMMAND guard_tests)
 
+endif()
+
+if(CANVAS_BACKEND_CAIRO OR CANVAS_BACKEND_GDIPLUS)
   add_executable(canvas_tests pixel_tests.cpp)
   target_link_libraries(canvas_tests PRIVATE canvas)
   add_test(NAME canvas_pixels COMMAND canvas_tests)

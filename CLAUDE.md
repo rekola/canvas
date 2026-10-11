@@ -74,9 +74,10 @@ without a backend. Add a pixel test with every behaviour change.
 - Intersecting clips works on flattened polygons and needs one of each
   pair convex (rectangles, circles); two concave clips replace instead.
 
-- GDI+ is only compile-checked in CI (`ci-windows.yml`, MSYS2 UCRT64);
-  the pixel tests are Cairo-only. Its clipping is per-pixel and
-  unantialiased.
+- GDI+ runs the same pixel tests as Cairo in CI (`ci-windows.yml`, MSYS2
+  UCRT64; `pixel_tests.cpp` uses whichever backend the build has), but
+  they are not run locally on Linux: push and read the Windows job. Its
+  clipping is per-pixel and unantialiased.
 
 ## Conventions
 
