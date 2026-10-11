@@ -65,8 +65,9 @@ without a backend. Add a pixel test with every behaviour change.
   `CanvasGradient` is shared, so later stops would still apply).
 - **Text is basic.** Cairo's text path has no shaping or font fallback, so
   clients keep labels outside canvas.
-- Colour strings: `#rgb`/`#rrggbb` and `black`/`white` only; `rgba(...)`
-  is not implemented (it asserts). Use `Color(r, g, b, a)`.
+- Colour strings: `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, `rgb()`, `rgba()`
+  (numbers or percentages), the CSS named colours and `transparent`. Anything
+  else is opaque black, never an assert.
 
 ## Known gaps
 
