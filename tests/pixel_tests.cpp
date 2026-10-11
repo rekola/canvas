@@ -29,7 +29,7 @@ static Px pixel(Context & ctx, unsigned x, unsigned y) {
   return { p[0], p[1], p[2], p[3] };
 }
 
-static bool near(int a, int b, int tol = 2) { return std::abs(a - b) <= tol; }
+static bool close_to(int a, int b, int tol = 2) { return std::abs(a - b) <= tol; }
 
 int main() {
 #if defined(CANVAS_HAS_GDIPLUS) && !defined(CANVAS_HAS_CAIRO)
@@ -51,7 +51,7 @@ int main() {
     ctx.fillStyle = Color(1.0f, 1.0f, 1.0f, 0.5f);
     ctx.fillRect(0, 0, 4, 4);
     Px p = pixel(ctx, 1, 1);
-    CHECK(near(p.a, 128) && near(p.r, 128) && near(p.g, 128) && near(p.b, 128));
+    CHECK(close_to(p.a, 128) && close_to(p.r, 128) && close_to(p.g, 128) && close_to(p.b, 128));
   }
   {  // An antialiased diagonal line has partial coverage next to its centre
      // and nothing far from it.
@@ -74,7 +74,7 @@ int main() {
     ctx.lineWidth = 1.0f;
     ctx.beginPath().moveTo(0, 2).lineTo(8, 2).stroke();
     ctx.beginPath().moveTo(0, 5.5).lineTo(8, 5.5).stroke();
-    CHECK(near(pixel(ctx, 4, 1).a, 128) && near(pixel(ctx, 4, 2).a, 128));
+    CHECK(close_to(pixel(ctx, 4, 1).a, 128) && close_to(pixel(ctx, 4, 2).a, 128));
     CHECK(pixel(ctx, 4, 5).a == 255 && pixel(ctx, 4, 4).a == 0 && pixel(ctx, 4, 6).a == 0);
   }
   {  // A polyline covers each of its segments.
@@ -117,7 +117,7 @@ int main() {
     unsigned char rgba[4] = { 0, 0, 255, 128 };
     ctx.drawImage(ImageData(rgba, 1, 1, 4), 0, 0, 1, 1);
     Px p = pixel(ctx, 0, 0);
-    CHECK(near(p.a, 128) && near(p.b, 128) && p.r == 0 && p.g == 0);
+    CHECK(close_to(p.a, 128) && close_to(p.b, 128) && p.r == 0 && p.g == 0);
   }
   {  // The same pixel as premultiplied BGRA (what createImage() hands out) draws the same.
     TestContext ctx(2, 2);
@@ -126,7 +126,7 @@ int main() {
     img.setFormat(ChannelOrder::BGR, true);
     ctx.drawImage(img, 0, 0, 1, 1);
     Px p = pixel(ctx, 0, 0);
-    CHECK(near(p.a, 128) && near(p.b, 128) && p.r == 0 && p.g == 0);
+    CHECK(close_to(p.a, 128) && close_to(p.b, 128) && p.r == 0 && p.g == 0);
   }
   {  // 3 channels follow the channel order too.
     TestContext ctx(2, 1);
@@ -167,7 +167,7 @@ int main() {
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(6, 6, 3, 3);
     Px l = pixel(ctx, 5, 7), r = pixel(ctx, 9, 7);
-    CHECK(near(l.a, r.a, 2) && l.a > 20);
+    CHECK(close_to(l.a, r.a, 2) && l.a > 20);
   }
   {  // loadImage() asks the factory's converter for the path, and the name
      // may be UTF-8.

@@ -4,7 +4,9 @@
 #include "Context.h"
 #include <FilenameConverter.h>
 
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <algorithm>
 namespace Gdiplus
 {
