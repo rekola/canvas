@@ -3,53 +3,47 @@
 
 #include "Surface.h"
 
-// #define USE_FIXEDPOINT
-
 namespace canvas {
+  // A Perlin-noise image as a source for drawImage(): grey, opaque, 4
+  // channels (B, G, R, A premultiplied like the other surfaces' memory).
+  // It is not a target, so every drawing call does nothing. The same
+  // parameters always give the same pixels.
   class PerlinSurface : public Surface {
   public:
-    PerlinSurface(unsigned int _logical_width, unsigned int _logical_height, unsigned int _actual_width, unsigned int _actual_height, int octaves = 1, float alpha = 2, float beta = 2);
+    // octaves layers of noise, each alpha times weaker and beta times finer
+    // than the one before. period is the size in pixels of a noise cell in
+    // the first layer: noise is zero at whole-number coordinates, so a
+    // period of 1 would be flat grey.
+    PerlinSurface(unsigned int _logical_width, unsigned int _logical_height, unsigned int _actual_width, unsigned int _actual_height, int octaves = 1, float alpha = 2, float beta = 2, float period = 32.0f);
     ~PerlinSurface() {
       delete[] buffer;
     }
 
-    void * lockMemory(bool write_access = false) {
-      unsigned int w = getActualWidth(), h = getActualHeight();
-      delete[] buffer;
-      buffer = new unsigned char[w * h * 4];
-      unsigned int offset = 0;
-      for (unsigned int y = 0; y < h; y++) {
-	for (unsigned int x = 0; x < w; x++) {
-	  int f = int((evaluate(x, y, 0) + 0.7) / 1.4 * 255);
-	  unsigned char v = f < 0 ? 0 : (f >= 255 ? 255 : (unsigned char)f);
-	  buffer[offset++] = v;
-	  buffer[offset++] = v;
-	  buffer[offset++] = v;
-	  buffer[offset++] = 255;
-	}
-      }
-      return buffer;
-    }
+    void renderPath(RenderMode mode, const TransformationMatrix & transformation, const Path2D & path, const Style & style, float lineWidth, Operator op, float displayScale, float globalAlpha, float shadowBlur, float shadowOffsetX, float shadowOffsetY, const Color & shadowColor, const Path2D & clipPath, const LineStyle & lineStyle) override { }
+    void renderText(RenderMode mode, const Font & font, const Style & style, TextBaseline textBaseline, TextAlign textAlign, const std::string & text, const Point & p, float lineWidth, Operator op, float displayScale, float globalAlpha, float shadowBlur, float shadowOffsetX, float shadowOffsetY, const Color & shadowColor, const Path2D & clipPath) override { }
+    TextMetrics measureText(const Font & font, const std::string & text, TextBaseline textBaseline, float displayScale) override { return TextMetrics(); }
+    void drawImage(Surface & _img, const Point & p, double w, double h, float displayScale, float globalAlpha, float shadowBlur, float shadowOffsetX, float shadowOffsetY, const Color & shadowColor, const Path2D & clipPath, bool imageSmoothingEnabled = true) override { }
+    void drawImage(const ImageData & _img, const Point & p, double w, double h, float displayScale, float globalAlpha, float shadowBlur, float shadowOffsetX, float shadowOffsetY, const Color & shadowColor, const Path2D & clipPath, bool imageSmoothingEnabled = true) override { }
 
-    void releaseMemory() {
+    // The noise at actual size.
+    std::unique_ptr<Image> createImage(float display_scale) override;
+
+  protected:
+    void * lockMemory(bool write_access = false) override;
+    void releaseMemory() override {
       delete[] buffer;
       buffer = 0;
     }
 
-  protected:
     float evaluatePerlin(float x, float y, float z);
     float evaluate(float x, float y, float z);
-    
-  private:  
+
+  private:
     unsigned char * buffer = 0;
 
     int octaves;
-    float alpha, beta;
+    float alpha, beta, period;
     int p[512];
-#ifdef USE_FIXEDPOINT
-    int * fadetbl;
-    int xftable[16], yftable[16], zftable[16];
-#endif
   };
 };
 

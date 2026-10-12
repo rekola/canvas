@@ -41,8 +41,7 @@ Build
 One option per backend: `CANVAS_BACKEND_CAIRO` (default on), `CANVAS_BACKEND_GDIPLUS`,
 `CANVAS_BACKEND_QUARTZ`, `CANVAS_BACKEND_ANDROID` (default off). `CANVAS_TEXTURE_PACKING` (default off)
 adds `PackedImageData` (OpenGL texture formats, DXT and ETC1 compression). The target is
-`canvas::canvas`, installable and exported. `PerlinSurface` no longer compiles
-and is not part of the build.
+`canvas::canvas`, installable and exported.
 
 Pixel format
 ============

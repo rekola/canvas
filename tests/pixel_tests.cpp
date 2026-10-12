@@ -1,6 +1,8 @@
 // Pixel tests for what a client draws, run on whichever backend the build
 // has (Cairo, GDI+ or Quartz). The surface's memory is read back through
 // Surface::createImage().
+#include <PerlinSurface.h>
+
 #if defined(CANVAS_HAS_CAIRO)
 #include <ContextCairo.h>
 namespace canvas { typedef ContextCairo TestContext; typedef CairoContextFactory TestFactory; }
@@ -24,6 +26,7 @@ namespace canvas {
 
 #include <cstdio>
 #include <exception>
+#include <algorithm>
 #include <cstdlib>
 
 using namespace canvas;
@@ -435,6 +438,24 @@ int main() {
     Px inner = pixel(ctx, 8, 6), ring = pixel(ctx, 8, 1);
     CHECK(inner.r > 240 && inner.b < 15);
     CHECK(ring.b > 150);
+  }
+  {  // A PerlinSurface is a source for drawImage(): its noise lands on the context.
+    PerlinSurface noise(16, 16, 16, 16, 2, 2, 2, 8.0f);
+    auto expected = noise.createImage(1.0f);
+    TestContext ctx(16, 16);
+    ctx.drawImage(noise, 0, 0, 16, 16);
+    int distinct = 0, worst = 0;
+    int seen[256] = { 0 };
+    for (unsigned y = 0; y < 16; y++)
+      for (unsigned x = 0; x < 16; x++) {
+	Px p = pixel(ctx, x, y);
+	int want = expected->getData().getData()[4 * (y * 16 + x)];
+	CHECK(p.a == 255);
+	worst = std::max(worst, std::abs(p.r - want));
+	if (!seen[p.r]++) distinct++;
+      }
+    CHECK(distinct > 20);  // not flat
+    CHECK(worst <= 24);    // and the same picture
   }
   return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

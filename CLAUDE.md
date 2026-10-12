@@ -21,8 +21,7 @@ option per backend: `CANVAS_BACKEND_CAIRO` (on), `CANVAS_BACKEND_GDIPLUS`,
 `CANVAS_BACKEND_QUARTZ`, `CANVAS_BACKEND_ANDROID` (off). `CANVAS_TEXTURE_PACKING`
 (off) adds `PackedImageData`, Floyd-Steinberg and the DXT/ETC1 compressors,
 behind the `CANVAS_HAS_TEXTURE_PACKING` macro. The exported target
-is `canvas::canvas`. `src/PerlinSurface.cpp` is stale (does not compile) and
-is not in the build.
+is `canvas::canvas`.
 
 Tests are plain `main()` programs in `tests/` that draw and read pixels back
 (`tests/pixel_tests.cpp`); `tests/imagedata_tests.cpp` covers `ImageData`
@@ -72,6 +71,9 @@ without a backend. Add a pixel test with every behaviour change.
   dithering; `Palette::xterm256()` is indexed by xterm colour number.
   Always built. `FloydSteinberg.h` is the unrelated 16-bit texture dither
   and stays behind `CANVAS_TEXTURE_PACKING`.
+- **`PerlinSurface`** is a read-only source for `drawImage()`: grey noise,
+  deterministic, drawing calls do nothing. Noise is zero at whole-number
+  coordinates, so `period` (pixels per noise cell) must be above 1.
 - Colour strings: `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, `rgb()`, `rgba()`
   (numbers or percentages), the CSS named colours and `transparent`. Anything
   else is opaque black, never an assert.
