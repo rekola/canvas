@@ -74,6 +74,27 @@ Image names
 bundle's resources); the Cairo, GDI+ and Quartz factories take one. Paths are
 UTF-8 on every platform.
 
+Palettes and dithering
+======================
+
+`quantize(image, palette, options)` (`Dither.h`) reduces an `ImageData` to
+palette indices, one byte per pixel: what a 256-colour terminal or a Sixel
+image takes. `Palette::xterm256()` is the xterm palette by colour number, or
+give a `Palette` of up to 256 entries. It is always built, whatever
+`CANVAS_TEXTURE_PACKING` says.
+
+* `DitherMethod::ORDERED` (default) is a Bayer matrix (2, 4, 8 or 16 on a
+  side). Each pixel is decided by its own colour and position, so changing
+  one pixel changes only its output and an animated meter doesn't shimmer.
+* `DitherMethod::FLOYD_STEINBERG` diffuses the error: smoother, but a change
+  carries to everything after it.
+* `DitherMethod::NONE` takes the nearest entry.
+
+The image is read by its format; translucent pixels are composited over
+`options.background*` first (black by default). `options.firstIndex = 16`
+leaves out the xterm system colours, which terminals let the user change.
+One channel is taken as a grey level here, not as an alpha mask.
+
 Geometry
 ========
 

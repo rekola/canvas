@@ -67,6 +67,11 @@ without a backend. Add a pixel test with every behaviour change.
   `CanvasGradient` is shared, so later stops would still apply).
 - **Text is basic.** Cairo's text path has no shaping or font fallback, so
   clients keep labels outside canvas.
+- **Palettes.** `quantize()` (`Dither.h`) turns an `ImageData` into palette
+  indices with ordered (default, stable between frames) or Floyd-Steinberg
+  dithering; `Palette::xterm256()` is indexed by xterm colour number.
+  Always built. `FloydSteinberg.h` is the unrelated 16-bit texture dither
+  and stays behind `CANVAS_TEXTURE_PACKING`.
 - Colour strings: `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, `rgb()`, `rgba()`
   (numbers or percentages), the CSS named colours and `transparent`. Anything
   else is opaque black, never an assert.

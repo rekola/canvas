@@ -16,8 +16,10 @@ option(CANVAS_BUILD_TESTS "Build the tests" ${PROJECT_IS_TOP_LEVEL})
 add_library(canvas
   src/Color.cpp
   src/ColorProvider.cpp
+  src/Dither.cpp
   src/Image.cpp
   src/ImageData.cpp
+  src/Palette.cpp
   src/Path2D.cpp
   )
 add_library(canvas::canvas ALIAS canvas)
