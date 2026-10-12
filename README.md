@@ -1,6 +1,8 @@
 canvas
 ======
 
+[![Linux](https://github.com/rekola/canvas/actions/workflows/ci-linux.yml/badge.svg)](https://github.com/rekola/canvas/actions/workflows/ci-linux.yml) [![macOS](https://github.com/rekola/canvas/actions/workflows/ci-macos.yml/badge.svg)](https://github.com/rekola/canvas/actions/workflows/ci-macos.yml) [![Windows](https://github.com/rekola/canvas/actions/workflows/ci-windows.yml/badge.svg)](https://github.com/rekola/canvas/actions/workflows/ci-windows.yml)
+
 A C++ canvas implementation.
 
 Currently this library is used to create OpenGL textures with an interface which is based on HTML5 Canvas.
