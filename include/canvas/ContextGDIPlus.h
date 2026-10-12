@@ -2,7 +2,7 @@
 #define _CANVAS_CONTEXTGDIPLUS_H_
 
 #include "Context.h"
-#include <FilenameConverter.h>
+#include "FilenameConverter.h"
 
 #ifndef NOMINMAX
 #define NOMINMAX

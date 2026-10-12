@@ -1,7 +1,7 @@
-#include "FloydSteinberg.h"
+#include <canvas/FloydSteinberg.h>
 
-#include <ImageData.h>
-#include <ImageFormat.h>
+#include <canvas/ImageData.h>
+#include <canvas/ImageFormat.h>
 
 #include <cassert>
 #include <vector>

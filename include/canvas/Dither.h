@@ -1,7 +1,7 @@
 #ifndef _CANVAS_DITHER_H_
 #define _CANVAS_DITHER_H_
 
-#include <Palette.h>
+#include "Palette.h"
 
 #include <cstddef>
 #include <vector>

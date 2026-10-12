@@ -29,9 +29,11 @@ without a backend. Add a pixel test with every behaviour change.
 
 ## Layout
 
-- `include/` - all public headers, included as `<Name.h>` (so the include
-  directory is what a client adds). `Context.h` is the HTML5 API,
-  `Surface.h` the backend interface, `ImageData.h` the pixel buffer.
+- `include/canvas/` - all public headers, included by clients as
+  `<canvas/Name.h>` (so `include/` is what a client adds) and by each other
+  and by `src/` with quoted relative includes (`"Name.h"`). `Context.h` is
+  the HTML5 API, `Surface.h` the backend interface, `ImageData.h` the pixel
+  buffer.
 - `src/` - the core (`Path2D`, `Color`, `ImageData`, `Image`, ...) and one
   `Context<Backend>.cpp` per backend. `stb_image*.h`, `dxt.*` and
   `rg_etc1.*` are vendored; do not reformat them.

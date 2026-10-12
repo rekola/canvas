@@ -1,8 +1,8 @@
 #ifndef _CANVAS_PATH2D_H_
 #define _CANVAS_PATH2D_H_
 
-#include <Point.h>
-#include <TransformationMatrix.h>
+#include "Point.h"
+#include "TransformationMatrix.h"
 
 #include <cmath>
 #include <cstddef>

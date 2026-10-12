@@ -1,7 +1,7 @@
 #ifndef _CANVAS_FLOYDSTEINBERG_H_
 #define _CANVAS_FLOYDSTEINBERG_H_
 
-#include <InternalFormat.h>
+#include "InternalFormat.h"
 #include <memory>
 
 namespace canvas {

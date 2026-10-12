@@ -1,6 +1,6 @@
 // Backend-independent ImageData tests.
-#include <Image.h>
-#include <ImageData.h>
+#include <canvas/Image.h>
+#include <canvas/ImageData.h>
 
 #include <cmath>
 #include <cstdio>

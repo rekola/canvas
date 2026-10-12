@@ -3,11 +3,18 @@ canvas
 
 [![Linux](https://github.com/rekola/canvas/actions/workflows/ci-linux.yml/badge.svg)](https://github.com/rekola/canvas/actions/workflows/ci-linux.yml) [![macOS](https://github.com/rekola/canvas/actions/workflows/ci-macos.yml/badge.svg)](https://github.com/rekola/canvas/actions/workflows/ci-macos.yml) [![Windows](https://github.com/rekola/canvas/actions/workflows/ci-windows.yml/badge.svg)](https://github.com/rekola/canvas/actions/workflows/ci-windows.yml)
 
-A C++ canvas implementation.
+A C++17 implementation of the HTML5 Canvas 2D API, drawing with each platform's own 2D library: Cairo on Linux, GDI+ on Windows, Quartz 2D on Apple platforms and Android Canvas on Android. It draws into memory and hands the pixels out as `ImageData`, so it can be used to render charts, meters and textures.
 
-Currently this library is used to create OpenGL textures with an interface which is based on HTML5 Canvas.
+Version 0.2.0: breaking changes
+===============================
 
-On Windows, rendering is done using GDI+, Cairo is used on Linux, Quartz2D is used on iOS and Android Canvas is used on Android.
+0.2.0 does not keep source compatibility with 0.1.0. What to change:
+
+* **Headers moved to `include/canvas/`.** Include `<canvas/Color.h>` instead of `<Color.h>`, `<canvas/ContextCairo.h>` instead of `<ContextCairo.h>`, and so on for every canvas header. The old names are not kept. Add `include/` (or the install prefix's `include/`) to the include path, which `canvas::canvas` does for you. This also stops canvas picking up a client's own `Color.h` or `Image.h`. Canvas's own headers include each other with quoted relative includes.
+* **Gradients are values.** `auto & g = context->createLinearGradient(...)` no longer compiles; write `auto g = ...` and add the colour stops before assigning it to a style.
+* **Images name their format.** `ImageData` says whether it is RGB or BGR and straight or premultiplied (see Pixel format), and `drawImage()` converts. Image names are no longer prefixed with `"assets/"`: give the factory a `FilenameConverter` to map names to paths.
+* **The current path is in device coordinates.** Points are transformed when they are added (as in HTML5), `clip()` intersects with the existing clip and keeps the path, and `save()`/`restore()` leave the path alone.
+* **Backends:** `Surface::renderPath()` takes a `LineStyle` in place of the dash vector, and `Surface::readPixels()` replaces reading the locked memory directly. Colour strings that are not understood give black instead of asserting.
 
 Fluent Style
 ============

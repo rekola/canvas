@@ -1,7 +1,7 @@
-#include <PerlinSurface.h>
+#include <canvas/PerlinSurface.h>
 
-#include <Context.h>
-#include <Image.h>
+#include <canvas/Context.h>
+#include <canvas/Image.h>
 
 #include <algorithm>
 #include <cmath>

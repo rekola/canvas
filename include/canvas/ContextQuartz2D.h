@@ -5,7 +5,7 @@
 
 #include <QuartzCore/QuartzCore.h>
 #include <CoreText/CoreText.h>
-#include <FilenameConverter.h>
+#include "FilenameConverter.h"
 
 #include <unordered_map>
 

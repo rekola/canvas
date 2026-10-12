@@ -1,4 +1,4 @@
-#include <Color.h>
+#include <canvas/Color.h>
 
 #include <algorithm>
 #include <cctype>

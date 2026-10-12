@@ -1,7 +1,7 @@
 // Backend-independent PerlinSurface tests.
-#include <Context.h>
-#include <Image.h>
-#include <PerlinSurface.h>
+#include <canvas/Context.h>
+#include <canvas/Image.h>
+#include <canvas/PerlinSurface.h>
 
 #include <cmath>
 #include <cstdio>

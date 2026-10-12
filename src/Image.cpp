@@ -1,6 +1,6 @@
-#include <Image.h>
+#include <canvas/Image.h>
 
-#include <ImageLoadingException.h>
+#include <canvas/ImageLoadingException.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"

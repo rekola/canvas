@@ -1,12 +1,12 @@
 #ifndef _CANVAS_CONTEXT_H_
 #define _CANVAS_CONTEXT_H_
 
-#include <GraphicsState.h>
+#include "GraphicsState.h"
 
-#include <Color.h>
-#include <Surface.h>
-#include <Image.h>
-#include <HitRegion.h>
+#include "Color.h"
+#include "Surface.h"
+#include "Image.h"
+#include "HitRegion.h"
 
 #include <cmath>
 #include <string>

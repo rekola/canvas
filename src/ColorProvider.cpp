@@ -1,4 +1,4 @@
-#include "ColorProvider.h"
+#include <canvas/ColorProvider.h>
 
 using namespace std;
 using namespace canvas;

@@ -1,5 +1,5 @@
 // Backend-independent Path2D tests.
-#include <Path2D.h>
+#include <canvas/Path2D.h>
 
 #include <cmath>
 #include <cstdio>
