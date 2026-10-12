@@ -6,6 +6,10 @@ add_executable(dither_tests dither_tests.cpp)
 target_link_libraries(dither_tests PRIVATE canvas)
 add_test(NAME canvas_dither COMMAND dither_tests)
 
+add_executable(perlin_tests perlin_tests.cpp)
+target_link_libraries(perlin_tests PRIVATE canvas)
+add_test(NAME canvas_perlin COMMAND perlin_tests)
+
 add_executable(path_tests path_tests.cpp)
 target_link_libraries(path_tests PRIVATE canvas)
 add_test(NAME canvas_path COMMAND path_tests)

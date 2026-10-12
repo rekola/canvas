@@ -21,6 +21,7 @@ add_library(canvas
   src/ImageData.cpp
   src/Palette.cpp
   src/Path2D.cpp
+  src/PerlinSurface.cpp
   )
 add_library(canvas::canvas ALIAS canvas)
 

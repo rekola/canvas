@@ -1,14 +1,15 @@
 #include <PerlinSurface.h>
 
+#include <Context.h>
+#include <Image.h>
+
+#include <algorithm>
+#include <cmath>
+
 using namespace std;
 using namespace canvas;
 
-#include <cmath>
-
-#define FIXED_PERMUTATION
-#define FIXEDBITS 14
-
-#ifdef FIXED_PERMUTATION
+// Ken Perlin's reference permutation.
 static unsigned char permutation[] = { 151,160,137,91,90,15,
 				       131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,
 				       190, 6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,
@@ -23,56 +24,13 @@ static unsigned char permutation[] = { 151,160,137,91,90,15,
 				       49,192,214, 31,181,199,106,157,184, 84,204,176,115,121,50,45,127, 4,150,254,
 				       138,236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180
 };
-#endif
 
 static inline float fade(float t) {
   return t * t * t * (t * (t * 6 - 15) + 10);
 }
 
-#ifdef USE_FIXEDPOINT
-
-static inline int grad(int hashval, int x, int y, int z) {
-  // CONVERT LO 4 BITS OF HASH CODE INTO 12 GRADIENT DIRECTIONS.
-  int h = hashval & 15;
-#if 1
-#if 1
-  int u = h < 8 ? x : y;
-#else
-  int u = h & 8 ? y : x;
-#endif
-#if 1
-  int v = h < 4 ? y : h == 12 || h == 14 ? x : z;
-#else 
-  int v = h & 12 ? (h == 12 || h == 14 ? x : z) : y;
-#endif
-#if 1
-  return ((h & 1) == 0 ? u : -u) + ((h & 2) == 0 ? v : -v);
-#else
-  if (h & 1) u *= -1;
-  if (h & 2) v *= -1;
-  return u + v;
-#endif
-#else
-  int xf = 0, yf = 0, zf = 0;
-  if (h & 8) xf = h & 1 ? -1 : 1;
-  else yf = h & 1 ? -1 : 1;
-  if (h & 12) {
-    if (h == 12 || h == 14) xf += h & 2 ? -1 : 1;
-    else z = hf & 2 ? -1 : 1;
-  }
-  else yf += h & 2 ? -1 : 1;
-  return xf * x + yf * y + zf * z;
-#endif
-}
-
-static inline int lerp(int t, int a, int b) {
-  return a + ((t * (b - a)) >> FIXEDBITS);
-}
-
-#else
-
 static inline float grad(int hashval, float x, float y, float z) {
-  // CONVERT LO 4 BITS OF HASH CODE INTO 12 GRADIENT DIRECTIONS.
+  // Convert the low 4 bits of the hash code into 12 gradient directions.
   int h = hashval & 15;
   float u = h < 8 ? x : y;
   float v = h < 4 ? y : h == 12 || h == 14 ? x : z;
@@ -83,122 +41,30 @@ static inline float lerp(float t, float a, float b) {
   return a + t * (b - a);
 }
 
-#endif
-
-PerlinSurface::PerlinSurface(unsigned int _logical_width, unsigned int _logical_height, unsigned int _actual_width, unsigned int _actual_height, int _octaves, float _alpha, float _beta)
-  : Surface(_logical_width, _logical_height, _actual_width, _actual_height), octaves(_octaves), alpha(_alpha), beta(_beta) 
-{  
-  
-#ifndef FIXED_PERMUTATION
-  int i, permutation[256];
-  for (i = 0; i < 256; i++) {
-    permutation[i] = i;
+PerlinSurface::PerlinSurface(unsigned int _logical_width, unsigned int _logical_height, unsigned int _actual_width, unsigned int _actual_height, int _octaves, float _alpha, float _beta, float _period)
+  : Surface(_logical_width, _logical_height, _actual_width, _actual_height, 4),
+    octaves(std::max(1, _octaves)), alpha(_alpha), beta(_beta), period(_period > 0.0f ? _period : 1.0f)
+{
+  for (int i = 0; i < 256; i++) {
+    p[256 + i] = p[i] = permutation[i];
   }
-  for (i = 0; i < 256; i++) {
-    int tmp = permutation[i];
-    int j = rand_r(&seed) & 255;
-    permutation[i] = permutation[j];
-    permutation[j] = tmp;
-  }
-#endif
-  for(int i = 0; i < 256 ; i++) {
-    p[256 + i] = p[i] = permutation[i]; 
-  }
-#ifdef USE_FIXEDPOINT
-  int n = 1 << FIXEDBITS;
-  fadetbl = new int[n];
-  for (int i = 0; i < n; i++) {
-    fadetbl[i] = (int)(fade((float)i / n) * n);
-  }
-  for (int h = 0; h < 15; h++) {
-    int xf = 0, yf = 0, zf = 0;
-    if (h & 8) xf = h & 1 ? -1 : 1;
-    else yf = h & 1 ? -1 : 1;
-    if (h & 12) {
-      if (h == 12 || h == 14) xf += h & 2 ? -1 : 1;
-      else zf = h & 2 ? -1 : 1;
-    }
-    else yf += h & 2 ? -1 : 1;
-    xftable[h] = xf;
-    yftable[h] = yf;
-    zftable[h] = zf;
-  }
-#endif
 }
 
 float
 PerlinSurface::evaluatePerlin(float x, float y, float z) {
-#ifdef USE_FIXEDPOINT
-  int b = 1 << FIXEDBITS;
-  int bm = b - 1;
-  float fpf = 1.0 / b;
-#endif  
-#ifdef USE_FIXEDPOINT
-#if 1
-  int x = int(vec[i].x * b), y = int(vec[i].y * b), z = int(vec[i].z * b);
-#else
-  int x = 0, y = 0, z = 0;
-#endif
-#if 1
-  int flx = x >> FIXEDBITS, fly = y >> FIXEDBITS, flz = z >> FIXEDBITS;
-  int X = flx & 255, Y = fly & 255, Z = flz & 255;
-  x = x & bm;
-  y = y & bm;
-  z = z & bm;
-  int u = fadetbl[x], v = fadetbl[y], w = fadetbl[z];
-  int A = p[X    ] + Y, AA = p[A] + Z, AB = p[A + 1] + Z;
-  int B = p[X + 1] + Y, BA = p[B] + Z, BB = p[B + 1] + Z;
-#else 
-  int u = 0, v = 0, w = 0;
-  int A = 0, B = 0, AA = 0, AB = 0, BA = 0, BB = 0;
-#endif
-  int x2 = x - b, y2 = y - b, z2 = z - b;
-#if 1
-  int g1 = grad(p[AA  ], x,   y,  z  );
-  int g2 = grad(p[BA  ], x2,  y,  z  );
-  int g3 = grad(p[AB  ], x,   y2, z  );
-  int g4 = grad(p[BB  ], x2,  y2, z  );
-  int g5 = grad(p[AA+1], x,   y,  z2 );
-  int g6 = grad(p[BA+1], x2,  y,  z2 );
-  int g7 = grad(p[AB+1], x,   y2, z2 );
-  int g8 = grad(p[BB+1], x2,  y2, z2 );
-#else
-  int h;
-  h = p[AA  ] & 15; int g1 = xftable[h] * x  + yftable[h] * y  + zftable[h] * z;
-  h = p[BA  ] & 15; int g2 = xftable[h] * x2 + yftable[h] * y  + zftable[h] * z;
-  h = p[AB  ] & 15; int g3 = xftable[h] * x  + yftable[h] * y2 + zftable[h] * z;
-  h = p[BB  ] & 15; int g4 = xftable[h] * x2 + yftable[h] * y2 + zftable[h] * z;
-  h = p[AA+1] & 15; int g5 = xftable[h] * x  + yftable[h] * y  + zftable[h] * z2;
-  h = p[BA+1] & 15; int g6 = xftable[h] * x2 + yftable[h] * y  + zftable[h] * z2;
-  h = p[AB+1] & 15; int g7 = xftable[h] * x  + yftable[h] * y2 + zftable[h] * z2;
-  h = p[BB+1] & 15; int g8 = xftable[h] * x2 + yftable[h] * y2 + zftable[h] * z2;
-  // int g1 = 0, g2 = 0, g3 = 0, g4 = 0, g5 = 0, g6 = 0, g7 = 0, g8 = 0;
-#endif
-#if 1
-  int val = lerp(w, lerp(v, lerp(u, g1, g2),
-			 lerp(u, g3, g4)),
-		 lerp(v, lerp(u, g5, g6),
-		      lerp(u, g7, g8)));
-#else 
-  int val = 0;
-#endif
-  return fpf * val;
-#else
-  
-  // Find the unit cube that contains the point
-  // float x = vec[i].x, y = vec[i].y, z = vec[i].z;
+  // Find the unit cube that contains the point.
   int flx = (int)floorf(x), fly = (int)floorf(y), flz = (int)floorf(z);
   int X = flx & 255, Y = fly & 255, Z = flz & 255;
-  // Find relative x, y, z of point in cube
+  // Find relative x, y, z of point in cube.
   x -= flx;
   y -= fly;
   z -= flz;
-  // Compute fade curves for each of x, y, z
+  // Compute fade curves for each of x, y, z.
   float u = fade(x), v = fade(y), w = fade(z);
-  // Hash coordinates of the 8 cube corners
+  // Hash coordinates of the 8 cube corners.
   int A = p[X    ] + Y, AA = p[A] + Z, AB = p[A + 1] + Z;
   int B = p[X + 1] + Y, BA = p[B] + Z, BB = p[B + 1] + Z;
-  // And add blended results from 8 corners of the cube
+  // And add blended results from 8 corners of the cube.
   return lerp(w, lerp(v, lerp(u, grad(p[AA  ], x,   y,   z  ),
 			         grad(p[BA  ], x-1, y,   z  )),
 		         lerp(u, grad(p[AB  ], x,   y-1, z  ),
@@ -207,7 +73,6 @@ PerlinSurface::evaluatePerlin(float x, float y, float z) {
 			         grad(p[BA+1], x-1, y,   z-1)),
 		         lerp(u, grad(p[AB+1], x,   y-1, z-1),
 			         grad(p[BB+1], x-1, y-1, z-1))));
-#endif
 }
 
 float
@@ -222,4 +87,40 @@ PerlinSurface::evaluate(float x, float y, float z) {
     scale *= alpha;
   }
   return v;
+}
+
+void *
+PerlinSurface::lockMemory(bool write_access) {
+  size_t w = getActualWidth(), h = getActualHeight();
+  delete[] buffer;
+  buffer = new unsigned char[w * h * 4];
+  // The layers are independent, so their spread adds in quadrature: divide
+  // by that, so more octaves add detail without clipping or losing contrast.
+  float total = 0, weight = 1;
+  for (int o = 0; o < octaves; o++) {
+    total += weight * weight;
+    weight /= alpha;
+  }
+  total = sqrtf(total);
+  size_t offset = 0;
+  for (size_t y = 0; y < h; y++) {
+    for (size_t x = 0; x < w; x++) {
+      // The pixel centre, in noise cells: the noise is zero on whole numbers.
+      float n = evaluate((x + 0.5f) / period, (y + 0.5f) / period, 0) / total;
+      int f = int((n + 0.7f) / 1.4f * 255);
+      unsigned char v = f < 0 ? 0 : (f >= 255 ? 255 : (unsigned char)f);
+      buffer[offset++] = v;
+      buffer[offset++] = v;
+      buffer[offset++] = v;
+      buffer[offset++] = 255;
+    }
+  }
+  return buffer;
+}
+
+std::unique_ptr<Image>
+PerlinSurface::createImage(float display_scale) {
+  auto image = std::make_unique<Image>(display_scale);
+  image->getDataPtr() = readPixels();
+  return image;
 }
