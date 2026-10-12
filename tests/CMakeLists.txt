@@ -2,6 +2,10 @@ add_executable(imagedata_tests imagedata_tests.cpp)
 target_link_libraries(imagedata_tests PRIVATE canvas)
 add_test(NAME canvas_imagedata COMMAND imagedata_tests)
 
+add_executable(dither_tests dither_tests.cpp)
+target_link_libraries(dither_tests PRIVATE canvas)
+add_test(NAME canvas_dither COMMAND dither_tests)
+
 add_executable(path_tests path_tests.cpp)
 target_link_libraries(path_tests PRIVATE canvas)
 add_test(NAME canvas_path COMMAND path_tests)
