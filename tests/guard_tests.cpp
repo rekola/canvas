@@ -1,5 +1,6 @@
 // A client with its own Color.h and Image.h (generic guard names) must be
-// able to include canvas headers after them.
+// able to include canvas headers after them. The headers live in canvas/,
+// so the names can't collide in the include path either.
 #ifndef _COLOR_H_
 #define _COLOR_H_
 class Color { public: int r = 1; };
@@ -9,7 +10,7 @@ class Color { public: int r = 1; };
 class Image { public: int w = 2; };
 #endif
 
-#include <ContextCairo.h>
+#include <canvas/ContextCairo.h>
 
 int main() {
   ::Color own;

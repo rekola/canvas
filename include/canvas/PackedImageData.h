@@ -1,7 +1,7 @@
 #ifndef _CANVAS_PACKEDIMAGEDATA_H_
 #define _CANVAS_PACKEDIMAGEDATA_H_
 
-#include <InternalFormat.h>
+#include "InternalFormat.h"
 
 #include <memory>
 #include <cstring>

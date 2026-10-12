@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(canvas VERSION 0.1.0 LANGUAGES CXX)
+project(canvas VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -11,8 +11,8 @@ option(CANVAS_BACKEND_ANDROID "Android Canvas backend (JNI)" OFF)
 option(CANVAS_TEXTURE_PACKING "PackedImageData: GL texture formats, DXT and ETC1 compression" OFF)
 option(CANVAS_BUILD_TESTS "Build the tests" ${PROJECT_IS_TOP_LEVEL})
 
-# The core. Sources include their headers as <Name.h>, so the include
-# directory is public.
+# The core. Clients include the headers as <canvas/Name.h>; the headers
+# include each other with quoted relative includes ("Name.h").
 add_library(canvas
   src/Color.cpp
   src/ColorProvider.cpp
@@ -31,7 +31,7 @@ if(CANVAS_TEXTURE_PACKING)
 endif()
 target_include_directories(canvas PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include/canvas>)
+  $<INSTALL_INTERFACE:include>)
 
 if(CANVAS_BACKEND_CAIRO)
   find_package(PkgConfig REQUIRED)
@@ -59,7 +59,7 @@ if(CANVAS_BACKEND_ANDROID)
 endif()
 
 install(TARGETS canvas EXPORT canvasTargets ARCHIVE DESTINATION lib)
-install(DIRECTORY include/ DESTINATION include/canvas)
+install(DIRECTORY include/canvas DESTINATION include)
 install(EXPORT canvasTargets NAMESPACE canvas:: DESTINATION lib/cmake/canvas)
 
 if(CANVAS_BUILD_TESTS)

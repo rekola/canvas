@@ -1,16 +1,16 @@
 // Pixel tests for what a client draws, run on whichever backend the build
 // has (Cairo, GDI+ or Quartz). The surface's memory is read back through
 // Surface::createImage().
-#include <PerlinSurface.h>
+#include <canvas/PerlinSurface.h>
 
 #if defined(CANVAS_HAS_CAIRO)
-#include <ContextCairo.h>
+#include <canvas/ContextCairo.h>
 namespace canvas { typedef ContextCairo TestContext; typedef CairoContextFactory TestFactory; }
 #elif defined(CANVAS_HAS_GDIPLUS)
-#include <ContextGDIPlus.h>
+#include <canvas/ContextGDIPlus.h>
 namespace canvas { typedef ContextGDIPlus TestContext; typedef GDIPlusContextFactory TestFactory; }
 #elif defined(CANVAS_HAS_QUARTZ)
-#include <ContextQuartz2D.h>
+#include <canvas/ContextQuartz2D.h>
 namespace canvas {
   // The Quartz context takes a shared cache; the tests don't care.
   class TestContext : public ContextQuartz2D {

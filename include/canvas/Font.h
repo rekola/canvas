@@ -1,8 +1,8 @@
 #ifndef _CANVAS_FONT_H_
 #define _CANVAS_FONT_H_
 
-#include <Attribute.h>
-#include <FontWeight.h>
+#include "Attribute.h"
+#include "FontWeight.h"
 
 namespace canvas {
   class Font : public AttributeBase {

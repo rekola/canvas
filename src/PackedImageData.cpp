@@ -1,7 +1,7 @@
-#include <PackedImageData.h>
+#include <canvas/PackedImageData.h>
 
-#include <FloydSteinberg.h>
-#include <ImageData.h>
+#include <canvas/FloydSteinberg.h>
+#include <canvas/ImageData.h>
 
 #include "rg_etc1.h"
 #include "dxt.h"

@@ -1,12 +1,12 @@
 #ifndef _CANVAS_STYLE_H_
 #define _CANVAS_STYLE_H_
 
-#include <Attribute.h>
+#include "Attribute.h"
 
-#include <Color.h>
-#include <Filter.h>
-#include <Point.h>
-#include <TransformationMatrix.h>
+#include "Color.h"
+#include "Filter.h"
+#include "Point.h"
+#include "TransformationMatrix.h"
 
 #include <string>
 #include <map>

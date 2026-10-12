@@ -1,18 +1,18 @@
 #ifndef _CANVAS_SURFACE_H_
 #define _CANVAS_SURFACE_H_
 
-#include <Color.h>
-#include <Path2D.h>
-#include <Style.h>
-#include <Font.h>
-#include <TextBaseline.h>
-#include <TextAlign.h>
-#include <TextMetrics.h>
-#include <Operator.h>
-#include <ImageData.h>
-#include <LineStyle.h>
+#include "Color.h"
+#include "Path2D.h"
+#include "Style.h"
+#include "Font.h"
+#include "TextBaseline.h"
+#include "TextAlign.h"
+#include "TextMetrics.h"
+#include "Operator.h"
+#include "ImageData.h"
+#include "LineStyle.h"
 #ifdef CANVAS_HAS_TEXTURE_PACKING
-#include <PackedImageData.h>
+#include "PackedImageData.h"
 #endif
 
 #include <cassert>

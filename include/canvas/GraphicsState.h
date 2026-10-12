@@ -1,13 +1,13 @@
 #ifndef _CANVAS_GRAPHICSSTATE_H_
 #define _CANVAS_GRAPHICSSTATE_H_
 
-#include <Style.h>
-#include <LineStyle.h>
-#include <Font.h>
-#include <TextBaseline.h>
-#include <TextAlign.h>
-#include <Path2D.h>
-#include <TransformationMatrix.h>
+#include "Style.h"
+#include "LineStyle.h"
+#include "Font.h"
+#include "TextBaseline.h"
+#include "TextAlign.h"
+#include "Path2D.h"
+#include "TransformationMatrix.h"
 
 #include <cmath>
 

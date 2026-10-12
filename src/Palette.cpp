@@ -1,4 +1,4 @@
-#include <Palette.h>
+#include <canvas/Palette.h>
 
 #include <algorithm>
 #include <cstdlib>

@@ -1,7 +1,7 @@
 // Backend-independent palette and dithering tests.
-#include <Dither.h>
-#include <ImageData.h>
-#include <Palette.h>
+#include <canvas/Dither.h>
+#include <canvas/ImageData.h>
+#include <canvas/Palette.h>
 
 #include <cstdio>
 #include <cstdlib>

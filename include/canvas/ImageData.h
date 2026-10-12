@@ -1,7 +1,7 @@
 #ifndef _CANVAS_IMAGEDATA_H_
 #define _CANVAS_IMAGEDATA_H_
 
-#include <Color.h>
+#include "Color.h"
 
 #include <cstring>
 #include <memory>

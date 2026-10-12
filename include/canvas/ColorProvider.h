@@ -1,7 +1,7 @@
 #ifndef _CANVAS_COLORPROVIDER_H_
 #define _CANVAS_COLORPROVIDER_H_
 
-#include <Color.h>
+#include "Color.h"
 
 #include <vector>
 
