@@ -13,6 +13,32 @@ Path2D::arc(const Point & p, double radius, double sa, double ea, bool anticlock
   current_point_ = Point(p.x + radius * cos(ea), p.y + radius * sin(ea));
 }
 
+void
+Path2D::quadraticCurveTo(double cpx, double cpy, double x, double y, double scale) {
+  // The same curve as a cubic with its control points two thirds of the way.
+  if (data_.empty()) moveTo(cpx, cpy);
+  Point p0 = current_point_;
+  bezierCurveTo(p0.x + 2.0 / 3.0 * (cpx - p0.x), p0.y + 2.0 / 3.0 * (cpy - p0.y),
+		x + 2.0 / 3.0 * (cpx - x), y + 2.0 / 3.0 * (cpy - y),
+		x, y, scale);
+}
+
+void
+Path2D::bezierCurveTo(double c1x, double c1y, double c2x, double c2y, double x, double y, double scale) {
+  if (data_.empty()) moveTo(c1x, c1y);
+  Point p0 = current_point_;
+  // About one segment per 3 pixels of control polygon.
+  double length = std::hypot(c1x - p0.x, c1y - p0.y) + std::hypot(c2x - c1x, c2y - c1y) + std::hypot(x - c2x, y - c2y);
+  int n = (int)std::ceil(length * std::fabs(scale) / 3.0);
+  n = std::min(256, std::max(8, n));
+  for (int i = 1; i <= n; i++) {
+    double t = double(i) / n, u = 1.0 - t;
+    double b0 = u * u * u, b1 = 3 * u * u * t, b2 = 3 * u * t * t, b3 = t * t * t;
+    lineTo(b0 * p0.x + b1 * c1x + b2 * c2x + b3 * x,
+	   b0 * p0.y + b1 * c1y + b2 * c2y + b3 * y);
+  }
+}
+
 // Implementation by node-canvas (Node canvas is a Cairo backed Canvas implementation for NodeJS)
 // Original implementation influenced by WebKit.
 void

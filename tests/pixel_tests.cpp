@@ -323,5 +323,118 @@ int main() {
     Px p = pixel(ctx, 3, 1);
     CHECK(p.a == 255 && p.r == 0 && p.g == 0 && p.b == 0);
   }
+  {  // Line caps: a square cap extends the line by half its width, a round one
+     // rounds the corner, butt stops at the end point.
+    Px corner[3], beyond[3];
+    const char * caps[3] = { "butt", "round", "square" };
+    for (int i = 0; i < 3; i++) {
+      TestContext ctx(16, 16);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 4.0f;
+      ctx.lineCap = caps[i];
+      ctx.beginPath().moveTo(4, 8).lineTo(12, 8).stroke();
+      corner[i] = pixel(ctx, 2, 6);
+      beyond[i] = pixel(ctx, 3, 7);
+    }
+    CHECK(beyond[0].a == 0 && corner[0].a == 0);
+    CHECK(beyond[1].a > 200 && corner[1].a < 128);
+    CHECK(beyond[2].a == 255 && corner[2].a == 255);
+  }
+  {  // Line joins: the outer corner of a right angle is filled by a miter, cut by a bevel.
+    Px outer[2];
+    const char * joins[2] = { "miter", "bevel" };
+    for (int i = 0; i < 2; i++) {
+      TestContext ctx(16, 16);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 4.0f;
+      ctx.lineJoin = joins[i];
+      ctx.beginPath().moveTo(4, 14).lineTo(4, 4).lineTo(14, 4).stroke();
+      outer[i] = pixel(ctx, 2, 2);
+    }
+    CHECK(outer[0].a == 255 && outer[1].a < 20);
+  }
+  {  // The miter limit turns a sharp miter into a bevel.
+    Px tip[2];
+    float limits[2] = { 10.0f, 1.0f };
+    for (int i = 0; i < 2; i++) {
+      TestContext ctx(16, 16);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 4.0f;
+      ctx.miterLimit = limits[i];
+      ctx.beginPath().moveTo(2, 14).lineTo(8, 2).lineTo(14, 14).stroke();
+      tip[i] = pixel(ctx, 8, 0);
+    }
+    CHECK(tip[0].a > 200 && tip[1].a < 20);
+  }
+  {  // Dashes, their offset, and save()/restore() of the line settings.
+    TestContext ctx(16, 8);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2.0f;
+    ctx.setLineDash({ 4.0f, 4.0f });
+    ctx.beginPath().moveTo(0, 4).lineTo(16, 4).stroke();
+    CHECK(pixel(ctx, 2, 3).a == 255 && pixel(ctx, 6, 3).a == 0 && pixel(ctx, 10, 3).a == 255 && pixel(ctx, 14, 3).a == 0);
+    ctx.clearRect(0, 0, 16, 8);
+    ctx.lineDashOffset = 4.0f;
+    ctx.beginPath().moveTo(0, 4).lineTo(16, 4).stroke();
+    CHECK(pixel(ctx, 2, 3).a == 0 && pixel(ctx, 6, 3).a == 255);
+
+    ctx.lineCap = "round";
+    ctx.save();
+    ctx.lineCap = "square";
+    ctx.restore();
+    CHECK(ctx.lineCap.get() == LineCap::ROUND);
+    ctx.lineCap = "nonsense";  // ignored
+    CHECK(ctx.lineCap.get() == LineCap::ROUND);
+    ctx.setLineDash({ 3.0f });  // an odd list is repeated
+    CHECK(ctx.getLineDash().size() == 2);
+    ctx.setLineDash({ -1.0f, 2.0f });  // an invalid one is ignored
+    CHECK(ctx.getLineDash().size() == 2 && ctx.getLineDash()[0] == 3.0f);
+  }
+  {  // Curves: a quadratic and a cubic pass through their midpoints, also under a scale.
+    TestContext ctx(16, 16);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2.0f;
+    ctx.beginPath().moveTo(2, 2).quadraticCurveTo(8, 14, 14, 2).stroke();
+    CHECK(pixel(ctx, 8, 7).a > 200 && pixel(ctx, 8, 8).a > 200);
+    CHECK(pixel(ctx, 8, 4).a == 0 && pixel(ctx, 8, 12).a == 0);
+
+    TestContext ctx2(16, 16);
+    ctx2.strokeStyle = "#ffffff";
+    ctx2.lineWidth = 2.0f;
+    ctx2.scale(2, 2);
+    ctx2.lineWidth = 1.0f;
+    ctx2.beginPath().moveTo(1, 4).bezierCurveTo(3, 1, 5, 7, 7, 4).stroke();
+    CHECK(pixel(ctx2, 8, 7).a > 100 || pixel(ctx2, 8, 8).a > 100);
+    CHECK(pixel(ctx2, 8, 1).a == 0 && pixel(ctx2, 8, 14).a == 0);
+  }
+  {  // A curve with no current point starts at its first control point.
+    TestContext ctx(16, 16);
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath().bezierCurveTo(2, 2, 14, 2, 14, 14).lineTo(2, 14).closePath().fill();
+    CHECK(pixel(ctx, 4, 12).a == 255 && pixel(ctx, 14, 2).a == 0);
+  }
+  {  // Radial gradient: red in the middle, blue at the edge, padded outside the circle.
+    TestContext ctx(16, 16);
+    auto g = ctx.createRadialGradient(8, 8, 0, 8, 8, 8);
+    g.addColorStop(0.0f, "#ff0000");
+    g.addColorStop(1.0f, "#0000ff");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 16, 16);
+    Px middle = pixel(ctx, 8, 8), edge = pixel(ctx, 8, 0), corner = pixel(ctx, 0, 0);
+    CHECK(middle.r > 200 && middle.b < 60);
+    CHECK(edge.b > 200 && edge.r < 60);
+    CHECK(corner.b > 240 && corner.r < 15 && corner.a == 255);
+  }
+  {  // An inner radius pads with the first colour inside it.
+    TestContext ctx(16, 16);
+    auto g = ctx.createRadialGradient(8, 8, 4, 8, 8, 8);
+    g.addColorStop(0.0f, "#ff0000");
+    g.addColorStop(1.0f, "#0000ff");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 16, 16);
+    Px inner = pixel(ctx, 8, 6), ring = pixel(ctx, 8, 1);
+    CHECK(inner.r > 240 && inner.b < 15);
+    CHECK(ring.b > 150);
+  }
   return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

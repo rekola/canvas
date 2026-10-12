@@ -137,7 +137,7 @@ CairoSurface::sendPath(const Path2D & path, float displayScale) {
 }
 
 void
-CairoSurface::renderPath(RenderMode mode, const TransformationMatrix & transformation, const Path2D & path, const Style & style, float lineWidth, Operator op, float displayScale, float globalAlpha, float shadowBlur, float shadowOffsetX, float shadowOffsetY, const Color & shadowColor, const Path2D & clipPath, const std::vector<float> & lineDash) {
+CairoSurface::renderPath(RenderMode mode, const TransformationMatrix & transformation, const Path2D & path, const Style & style, float lineWidth, Operator op, float displayScale, float globalAlpha, float shadowBlur, float shadowOffsetX, float shadowOffsetY, const Color & shadowColor, const Path2D & clipPath, const LineStyle & lineStyle) {
   initializeContext();
 
   if (!clipPath.empty()) {
@@ -146,13 +146,24 @@ CairoSurface::renderPath(RenderMode mode, const TransformationMatrix & transform
   }
 
   if (mode == RenderMode::STROKE) {
-    if (!lineDash.empty()) {
+    if (!lineStyle.dash.empty()) {
       std::vector<double> scaled_dash;
-      for (auto & v : lineDash) scaled_dash.push_back(transformation.transformSize(v) * displayScale);
-      cairo_set_dash(cr, scaled_dash.data(), scaled_dash.size(), 0);
+      for (auto & v : lineStyle.dash) scaled_dash.push_back(transformation.transformSize(v) * displayScale);
+      cairo_set_dash(cr, scaled_dash.data(), scaled_dash.size(), transformation.transformSize(lineStyle.dashOffset) * displayScale);
     } else {
       cairo_set_dash(cr, 0, 0, 0);
     }
+    switch (lineStyle.cap) {
+    case LineCap::BUTT: cairo_set_line_cap(cr, CAIRO_LINE_CAP_BUTT); break;
+    case LineCap::ROUND: cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND); break;
+    case LineCap::SQUARE: cairo_set_line_cap(cr, CAIRO_LINE_CAP_SQUARE); break;
+    }
+    switch (lineStyle.join) {
+    case LineJoin::MITER: cairo_set_line_join(cr, CAIRO_LINE_JOIN_MITER); break;
+    case LineJoin::ROUND: cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND); break;
+    case LineJoin::BEVEL: cairo_set_line_join(cr, CAIRO_LINE_JOIN_BEVEL); break;
+    }
+    cairo_set_miter_limit(cr, lineStyle.miterLimit);
   }
   
   switch (op) {
@@ -164,6 +175,13 @@ CairoSurface::renderPath(RenderMode mode, const TransformationMatrix & transform
   if (style.getType() == Style::LINEAR_GRADIENT) {
     pat = cairo_pattern_create_linear(style.p0.x * displayScale, style.p0.y * displayScale,
 				      style.p1.x * displayScale, style.p1.y * displayScale);
+    for (auto it = style.getColors().begin(); it != style.getColors().end(); it++) {
+      cairo_pattern_add_color_stop_rgba(pat, it->first, it->second.red, it->second.green, it->second.blue, it->second.alpha * globalAlpha);
+    }
+    cairo_set_source(cr, pat);
+  } else if (style.getType() == Style::RADIAL_GRADIENT) {
+    pat = cairo_pattern_create_radial(style.p0.x * displayScale, style.p0.y * displayScale, style.r0 * displayScale,
+				      style.p1.x * displayScale, style.p1.y * displayScale, style.r1 * displayScale);
     for (auto it = style.getColors().begin(); it != style.getColors().end(); it++) {
       cairo_pattern_add_color_stop_rgba(pat, it->first, it->second.red, it->second.green, it->second.blue, it->second.alpha * globalAlpha);
     }

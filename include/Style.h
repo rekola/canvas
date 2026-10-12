@@ -28,6 +28,8 @@ namespace canvas {
 	color(other.color),
 	p0(other.p0),
 	p1(other.p1),
+	r0(other.r0),
+	r1(other.r1),
 	type(other.type),
 	colors(other.colors),
 	filter(other.filter) { }
@@ -48,6 +50,8 @@ namespace canvas {
       color = other.color;
       p0 = other.p0;
       p1 = other.p1;
+      r0 = other.r0;
+      r1 = other.r1;
       type = other.type;
       colors = other.colors;
       filter = other.filter;
@@ -80,6 +84,12 @@ namespace canvas {
       p1 = Point(_x1, _y1);
     }
 
+    // A radial gradient runs from the circle (p0, r0) to the circle (p1, r1).
+    void setRadii(double _r0, double _r1) {
+      r0 = _r0;
+      r1 = _r1;
+    }
+
     const std::map<float, Color> & getColors() const { return colors; }
 
     Style transform(const TransformationMatrix & matrix) const {
@@ -87,6 +97,8 @@ namespace canvas {
 	auto s = *this;
 	s.p0 = matrix.multiply(s.p0);
 	s.p1 = matrix.multiply(s.p1);
+	s.r0 *= matrix.transformSize(1.0);
+	s.r1 *= matrix.transformSize(1.0);
 	return s;
       } else {
 	return *this;
@@ -95,6 +107,7 @@ namespace canvas {
     
     Color color;
     Point p0, p1;
+    double r0 = 0.0, r1 = 0.0;
 
   private:
     StyleType type = SOLID;

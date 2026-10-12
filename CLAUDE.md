@@ -57,7 +57,9 @@ without a backend. Add a pixel test with every behaviour change.
   Every setter, transform and path call returns `Context&`, so calls
   chain. Path points are transformed as they are added (`currentPath` is
   in device coordinates); a `Path2D` passed to `fill(path)` is in user
-  coordinates. `clip()` intersects with the existing clip and keeps the
+  coordinates. Line settings (`lineCap`, `lineJoin`, `miterLimit`,
+  `lineDashOffset`, `setLineDash()`) follow HTML5 and reach the backends
+  as a `LineStyle`. `clip()` intersects with the existing clip and keeps the
   path. Assigning one attribute to another copies its value, never its
   owner.
 - **Gradients are values.** `createLinearGradient()` returns a new `Style`
@@ -80,8 +82,10 @@ without a backend. Add a pixel test with every behaviour change.
   Android is not built in CI (its `AndroidSurface` predates the current
   `Surface` interface).
 
-- GDI+ clipping is per-pixel and unantialiased. Quartz ignores dash and
-  line settings and uses only the first and last gradient stop.
+- GDI+ clipping is per-pixel and unantialiased. GDI+ has no two-circle
+  radial gradient: it is exact for concentric circles and approximate
+  otherwise (a path gradient with the inner circle's centre as its focus).
+  Curves are flattened into line segments as they are added.
 
 ## Conventions
 
