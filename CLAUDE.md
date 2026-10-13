@@ -63,6 +63,17 @@ without a backend. Add a pixel test with every behaviour change.
   as a `LineStyle`. `clip()` intersects with the existing clip and keeps the
   path. Assigning one attribute to another copies its value, never its
   owner.
+- **Display scale.** Sizes and coordinates are logical units; the
+  backends multiply by `getDisplayScale()`. A logical size gets
+  `toPixels()` pixels (rounded down, `Surface.h`); a `PixelSize`
+  (constructors, `resize()`, `createSurface()`, factories) gives exact
+  pixels and a fractional logical size, so logical sizes are `float`.
+  Internal surfaces (shadows) are sized in pixels for that reason. At
+  scale 1 the output must stay byte-identical.
+- **Hairlines.** `lineWidth = 0` strokes one device pixel whatever the
+  transform and scale: `Context::getScaledLineWidth()` passes
+  `1 / scale` to the backends, which all multiply the width by the scale,
+  so no backend has its own hairline code.
 - **Gradients are values.** `createLinearGradient()` returns a new `Style`
   each call; add its stops before assigning it to a style (in HTML5 a
   `CanvasGradient` is shared, so later stops would still apply).

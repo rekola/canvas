@@ -184,7 +184,7 @@ Quartz2DSurface::renderPath(RenderMode mode, const TransformationMatrix & transf
 }
 
 void
-Quartz2DSurface::resize(unsigned int _logical_width, unsigned int _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels) {
+Quartz2DSurface::resize(float _logical_width, float _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels) {
   Surface::resize(_logical_width, _logical_height, _actual_width, _actual_height, _num_channels);
   
   if (gc) {

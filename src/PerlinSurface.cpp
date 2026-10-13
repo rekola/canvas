@@ -41,7 +41,7 @@ static inline float lerp(float t, float a, float b) {
   return a + t * (b - a);
 }
 
-PerlinSurface::PerlinSurface(unsigned int _logical_width, unsigned int _logical_height, unsigned int _actual_width, unsigned int _actual_height, int _octaves, float _alpha, float _beta, float _period)
+PerlinSurface::PerlinSurface(float _logical_width, float _logical_height, unsigned int _actual_width, unsigned int _actual_height, int _octaves, float _alpha, float _beta, float _period)
   : Surface(_logical_width, _logical_height, _actual_width, _actual_height, 4),
     octaves(std::max(1, _octaves)), alpha(_alpha), beta(_beta), period(_period > 0.0f ? _period : 1.0f)
 {

@@ -14,7 +14,7 @@ namespace canvas {
     // than the one before. period is the size in pixels of a noise cell in
     // the first layer: noise is zero at whole-number coordinates, so a
     // period of 1 would be flat grey.
-    PerlinSurface(unsigned int _logical_width, unsigned int _logical_height, unsigned int _actual_width, unsigned int _actual_height, int octaves = 1, float alpha = 2, float beta = 2, float period = 32.0f);
+    PerlinSurface(float _logical_width, float _logical_height, unsigned int _actual_width, unsigned int _actual_height, int octaves = 1, float alpha = 2, float beta = 2, float period = 32.0f);
     ~PerlinSurface() {
       delete[] buffer;
     }

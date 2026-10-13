@@ -28,6 +28,9 @@ namespace canvas {
 
     virtual std::unique_ptr<Surface> createSurface(const ImageData & image) = 0;
     virtual std::unique_ptr<Surface> createSurface(unsigned int _width, unsigned int _height, unsigned int _num_channels) = 0;
+    // A surface of exactly this many pixels; its logical size is
+    // size / getDisplayScale() and may be fractional.
+    virtual std::unique_ptr<Surface> createSurface(PixelSize size, unsigned int _num_channels) = 0;
     virtual Surface & getDefaultSurface() = 0;
     virtual const Surface & getDefaultSurface() const = 0;
 
@@ -35,7 +38,12 @@ namespace canvas {
     virtual bool hasNativeEmoticons() const { return false; }
 
     virtual void resize(unsigned int _width, unsigned int _height) {
-      getDefaultSurface().resize(_width, _height, (unsigned int)(_width * getDisplayScale()), (unsigned int)(_height * getDisplayScale()), getDefaultSurface().getNumChannels());
+      getDefaultSurface().resize(_width, _height, toPixels(_width, getDisplayScale()), toPixels(_height, getDisplayScale()), getDefaultSurface().getNumChannels());
+      hit_regions_.clear();
+    }
+    // Resizes to exactly this many pixels (see createSurface(PixelSize)).
+    virtual void resize(PixelSize size) {
+      getDefaultSurface().resize(size.width / getDisplayScale(), size.height / getDisplayScale(), size.width, size.height, getDefaultSurface().getNumChannels());
       hit_regions_.clear();
     }
         
@@ -160,8 +168,9 @@ namespace canvas {
     }
     const std::vector<float> & getLineDash() const { return lineDash; }
     
-    unsigned int getWidth() const { return getDefaultSurface().getLogicalWidth(); }
-    unsigned int getHeight() const { return getDefaultSurface().getLogicalHeight(); }
+    // Logical size; fractional for a pixel size at a fractional scale.
+    float getWidth() const { return getDefaultSurface().getLogicalWidth(); }
+    float getHeight() const { return getDefaultSurface().getLogicalHeight(); }
     unsigned int getActualWidth() const { return getDefaultSurface().getActualWidth(); }
     unsigned int getActualHeight() const { return getDefaultSurface().getActualHeight(); }
 
@@ -183,7 +192,7 @@ namespace canvas {
 	if (hasShadow()) {
 	  float b = shadowBlur.get(), bs = shadowBlur.get() * getDisplayScale();
 	  float bi = int(ceil(b));
-	  auto shadow = createSurface(getDefaultSurface().getLogicalWidth() + 2 * bi, getDefaultSurface().getLogicalHeight() + 2 * bi, 1);
+	  auto shadow = createShadowSurface(bi, 1);
 	  shadow->drawImage(img, Point(x + b + shadowOffsetX.get(), y + b + shadowOffsetY.get()), w, h, getDisplayScale(), globalAlpha.get(), 0.0f, 0.0f, 0.0f, shadowColor.get(), clipPath, imageSmoothingEnabled.get());
 	  // shadow->colorFill(shadowColor.get());
 	  auto shadow1 = shadow->blur(bs, bs);
@@ -205,7 +214,7 @@ namespace canvas {
 	if (hasShadow()) {
 	  float b = shadowBlur.get(), bs = shadowBlur.get() * getDisplayScale();
 	  float bi = int(ceil(b));
-	  auto shadow = createSurface(getDefaultSurface().getLogicalWidth() + 2 * bi, getDefaultSurface().getLogicalHeight() + 2 * bi, 1);
+	  auto shadow = createShadowSurface(bi, 1);
 	  
 	  shadow->drawImage(img, Point(p.x + b + shadowOffsetX.get(), p.y + b + shadowOffsetY.get()), w, h, getDisplayScale(), globalAlpha.get(), 0.0f, 0.0f, 0.0f, shadowColor.get(), clipPath, imageSmoothingEnabled.get());
 	  // shadow->colorFill(shadowColor.get());
@@ -270,6 +279,21 @@ namespace canvas {
 #endif
     
   protected:
+    // The default surface grown by at least pad logical units on each
+    // side, in whole pixels so that a fractional logical size stays exact.
+    std::unique_ptr<Surface> createShadowSurface(float pad, unsigned int num_channels) {
+      unsigned int p = (unsigned int)ceil(pad * getDisplayScale() - 1e-4);
+      return createSurface(PixelSize{ getDefaultSurface().getActualWidth() + 2 * p, getDefaultSurface().getActualHeight() + 2 * p }, num_channels);
+    }
+
+    // The stroke width after the transform. A lineWidth of 0 is a hairline:
+    // one device pixel whatever the transform and display scale (the
+    // backends multiply by the scale, so it is passed as 1 / scale).
+    float getScaledLineWidth() const {
+      if (lineWidth.get() == 0.0f) return 1.0f / getDisplayScale();
+      return currentTransform.transformSize(lineWidth.get(), true);
+    }
+
     LineStyle getLineStyle() const {
       LineStyle line;
       line.cap = lineCap.get();
@@ -300,8 +324,8 @@ namespace canvas {
 
     // The path is in device coordinates.
     Context & renderPath(RenderMode mode, const Path2D & path, const Style & style0, Operator op = Operator::SOURCE_OVER) {
-      auto scaled_lineWidth = currentTransform.transformSize(lineWidth.get(), true);
-      if (mode != RenderMode::STROKE || scaled_lineWidth > 0.1f) {
+      auto scaled_lineWidth = getScaledLineWidth();
+      if (mode != RenderMode::STROKE || lineWidth.get() == 0.0f || scaled_lineWidth > 0.1f) {
 	auto style = style0.transform(currentTransform);
 	
 	if (hasNativeShadows()) {
@@ -311,7 +335,7 @@ namespace canvas {
 	    float b = shadowBlur.get(), bs = shadowBlur.get() * getDisplayScale();
 	    float bi = int(ceil(b));
 #ifdef WIN32
-	    auto shadow = createSurface(getDefaultSurface().getLogicalWidth() + 2 * bi, getDefaultSurface().getLogicalHeight() + 2 * bi, 4);
+	    auto shadow = createShadowSurface(bi, 4);
 	    Style shadow_style(this);
 	    shadow_style = shadowColor.get();
 	    Path2D tmp_path = path, tmp_clipPath = clipPath;
@@ -322,7 +346,7 @@ namespace canvas {
 	    auto shadow1 = shadow->blur(bs, bs);
 	    getDefaultSurface().drawImage(*shadow1, Point(-b, -b), shadow->getLogicalWidth(), shadow->getLogicalHeight(), getDisplayScale(), 1.0f, 0.0f, 0.0f, 0.0f, shadowColor.get(), Path2D(), false);
 #else
-	    auto shadow = createSurface(getDefaultSurface().getLogicalWidth() + 2 * bi, getDefaultSurface().getLogicalHeight() + 2 * bi, 1);
+	    auto shadow = createShadowSurface(bi, 1);
 	    Style shadow_style(this);
 	    shadow_style = shadowColor.get();
 	    Path2D tmp_path = path, tmp_clipPath = clipPath;
@@ -343,8 +367,8 @@ namespace canvas {
     
     Context & renderText(RenderMode mode, const Style & style0, const std::string & text, const Point & p0, Operator op = Operator::SOURCE_OVER) {
       auto scaled_font_size = currentTransform.transformSize(font.size);
-      auto scaled_lineWidth = currentTransform.transformSize(lineWidth.get(), true);
-      if (scaled_font_size > 0.5f && (mode != RenderMode::STROKE || scaled_lineWidth > 0.1f)) {
+      auto scaled_lineWidth = getScaledLineWidth();
+      if (scaled_font_size > 0.5f && (mode != RenderMode::STROKE || lineWidth.get() == 0.0f || scaled_lineWidth > 0.1f)) {
 	auto p = currentTransform.multiply(p0);
 	auto tmp_font = font;
 	tmp_font.size = scaled_font_size;
@@ -357,7 +381,7 @@ namespace canvas {
 	  if (hasShadow()) {
 	    float b = shadowBlur.get(), bs = shadowBlur.get() * getDisplayScale();
 	    int bi = int(ceil(b));
-	    auto shadow = createSurface(getDefaultSurface().getLogicalWidth() + 2 * bi, getDefaultSurface().getLogicalHeight() + 2 * bi, 1);
+	    auto shadow = createShadowSurface(bi, 1);
 	  
 	    Style shadow_style(this);
 	    shadow_style = shadowColor.get();
@@ -391,6 +415,9 @@ namespace canvas {
     virtual ~ContextFactory() { }
     virtual std::unique_ptr<Context> createContext(unsigned int width, unsigned int height, unsigned int num_channels = 4) = 0;
     virtual std::unique_ptr<Surface> createSurface(unsigned int width, unsigned int height, unsigned int num_channels = 4) = 0;
+    // Exact pixel sizes; the logical size is size / getDisplayScale().
+    virtual std::unique_ptr<Context> createContext(PixelSize size, unsigned int num_channels = 4) = 0;
+    virtual std::unique_ptr<Surface> createSurface(PixelSize size, unsigned int num_channels = 4) = 0;
     virtual std::unique_ptr<Image> loadImage(const std::string & filename) = 0;
     virtual std::unique_ptr<Image> createImage() = 0;
     virtual std::unique_ptr<Image> createImage(const unsigned char * _data, unsigned int _width, unsigned int _height, unsigned int _num_channels) = 0;

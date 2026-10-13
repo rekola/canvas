@@ -14,13 +14,13 @@ namespace canvas {
   public:
     friend class ContextCairo;
 
-    CairoSurface(unsigned int _logical_width, unsigned int _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels);
+    CairoSurface(float _logical_width, float _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels);
     CairoSurface(const ImageData & image);
     CairoSurface(const CairoSurface & other) = delete;
     CairoSurface(const unsigned char * buffer, size_t size);
     ~CairoSurface();
     
-    void resize(unsigned int _logical_width, unsigned int _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels) override;
+    void resize(float _logical_width, float _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels) override;
 
     void renderPath(RenderMode mode, const TransformationMatrix & transformation, const Path2D & path, const Style & style, float lineWidth, Operator op, float displayScale, float globalAlpha, float shadowBlur, float shadowOffsetX, float shadowOffsetY, const Color & shadowColor, const Path2D & clipPath, const LineStyle & lineStyle) override;
     void renderText(RenderMode mode, const Font & font, const Style & style, TextBaseline textBaseline, TextAlign textAlign, const std::string & text, const Point & p, float lineWidth, Operator op, float displayScale, float globalAlpha, float shadowBlur, float shadowOffsetX, float shadowOffsetY, const Color & shadowColor, const Path2D & clipPath) override;
@@ -76,15 +76,25 @@ namespace canvas {
   public:
   ContextCairo(unsigned int _width, unsigned int _height, unsigned int _num_channels = 4, float _displayScale = 1.0f)
       : Context(_displayScale),
-      default_surface(_width, _height, (unsigned int)(_displayScale * _width), (unsigned int)(_displayScale * _height), _num_channels)
+      default_surface(_width, _height, toPixels(_width, _displayScale), toPixels(_height, _displayScale), _num_channels)
 	{ 
+	}
+    // A default surface of exactly size pixels; the logical size is
+    // size / _displayScale.
+    ContextCairo(PixelSize size, unsigned int _num_channels = 4, float _displayScale = 1.0f)
+      : Context(_displayScale),
+      default_surface(size.width / _displayScale, size.height / _displayScale, size.width, size.height, _num_channels)
+	{
 	}
     
     std::unique_ptr<Surface> createSurface(const ImageData & image) override {
       return std::unique_ptr<Surface>(new CairoSurface(image));
     }
     std::unique_ptr<Surface> createSurface(unsigned int _width, unsigned int _height, unsigned int _num_channels = 4) override {
-      return std::unique_ptr<Surface>(new CairoSurface(_width, _height, (unsigned int)(_width * getDisplayScale()), (unsigned int)(_height * getDisplayScale()), _num_channels));
+      return std::unique_ptr<Surface>(new CairoSurface(_width, _height, toPixels(_width, getDisplayScale()), toPixels(_height, getDisplayScale()), _num_channels));
+    }
+    std::unique_ptr<Surface> createSurface(PixelSize size, unsigned int _num_channels = 4) override {
+      return std::unique_ptr<Surface>(new CairoSurface(size.width / getDisplayScale(), size.height / getDisplayScale(), size.width, size.height, _num_channels));
     }
 
     CairoSurface & getDefaultSurface() override { return default_surface; }
@@ -102,8 +112,13 @@ namespace canvas {
       return std::unique_ptr<Context>(new ContextCairo(width, height, num_channels, getDisplayScale()));
     }
     std::unique_ptr<Surface> createSurface(unsigned int width, unsigned int height, unsigned int num_channels) override {
-      unsigned int aw = width * getDisplayScale(), ah = height * getDisplayScale();
-      return std::unique_ptr<Surface>(new CairoSurface(width, height, aw, ah, num_channels));
+      return std::unique_ptr<Surface>(new CairoSurface(width, height, toPixels(width, getDisplayScale()), toPixels(height, getDisplayScale()), num_channels));
+    }
+    std::unique_ptr<Context> createContext(PixelSize size, unsigned int num_channels) override {
+      return std::unique_ptr<Context>(new ContextCairo(size, num_channels, getDisplayScale()));
+    }
+    std::unique_ptr<Surface> createSurface(PixelSize size, unsigned int num_channels) override {
+      return std::unique_ptr<Surface>(new CairoSurface(size.width / getDisplayScale(), size.height / getDisplayScale(), size.width, size.height, num_channels));
     }
     std::unique_ptr<Image> loadImage(const std::string & filename) override;
     std::unique_ptr<Image> createImage() override;

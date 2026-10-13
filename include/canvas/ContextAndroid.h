@@ -328,7 +328,7 @@ class AndroidSurface: public Surface {
 public:
   friend class ContextAndroid;
 
-  AndroidSurface(AndroidCache * _cache, unsigned int _logical_width, unsigned int _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels);
+  AndroidSurface(AndroidCache * _cache, float _logical_width, float _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels);
   AndroidSurface(AndroidCache * _cache, const ImageData & image);
   AndroidSurface(AndroidCache * _cache, const std::string & filename);
   AndroidSurface(AndroidCache * _cache, const unsigned char * buffer, size_t size); // Create a bitmap from bytearray
@@ -382,7 +382,7 @@ public:
     paint.setStyle(style, displayScale);
     paint.setGlobalAlpha(globalAlpha);
     paint.setShadow(shadowBlur * displayScale, shadowOffsetX * displayScale, shadowOffsetY * displayScale, shadowColor);       
-    if (mode == STROKE) paint.setLineWidth(lineWidth);
+    if (mode == STROKE) paint.setLineWidth(lineWidth * displayScale);
 
 
 #if 0
@@ -443,7 +443,7 @@ public:
     env->DeleteLocalRef(jpath);
   }
 
-  void resize(unsigned int _logical_width, unsigned int _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels) override {
+  void resize(float _logical_width, float _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels) override {
     Surface::resize(_logical_width, _logical_height, _actual_width, _actual_height, _num_channels);
     // do resize the surface and discard the old data
 
@@ -486,7 +486,7 @@ public:
     paint.setGlobalAlpha(globalAlpha);
     paint.setShadow(shadowBlur * displayScale, shadowOffsetX * displayScale, shadowOffsetY * displayScale, shadowColor);
     paint.setTextAlign(textAlign);
-    if (mode == STROKE) paint.setLineWidth(lineWidth);
+    if (mode == STROKE) paint.setLineWidth(lineWidth * displayScale);
 
     jbyteArray array = env->NewByteArray(text.size());
     env->SetByteArrayRegion(array, 0, text.size(), (const jbyte*) text.c_str());
@@ -641,14 +641,22 @@ private:
 class ContextAndroid: public Context {
 public:
   ContextAndroid(AndroidCache * _cache, unsigned int _width, unsigned int _height, unsigned int _num_channels, float _displayScale) :
-      Context(_displayScale), cache(_cache), default_surface(_cache, _width, _height, (unsigned int) (_width * _displayScale), (unsigned int) (_height * _displayScale), _num_channels) {
+      Context(_displayScale), cache(_cache), default_surface(_cache, _width, _height, toPixels(_width, _displayScale), toPixels(_height, _displayScale), _num_channels) {
+  }
+  // A default surface of exactly size pixels; the logical size is
+  // size / _displayScale.
+  ContextAndroid(AndroidCache * _cache, PixelSize size, unsigned int _num_channels, float _displayScale) :
+      Context(_displayScale), cache(_cache), default_surface(_cache, size.width / _displayScale, size.height / _displayScale, size.width, size.height, _num_channels) {
   }
 
   std::unique_ptr<Surface> createSurface(const ImageData & image) override {
     return std::unique_ptr<Surface>(new AndroidSurface(cache, image));
   }
   std::unique_ptr<Surface> createSurface(unsigned int _width, unsigned int _height, unsigned int _num_channels) override {
-    return std::unique_ptr<Surface>(new AndroidSurface(cache, _width, _height, (unsigned int) (_width * getDisplayScale()), (unsigned int) (_height * getDisplayScale()), _num_channels));
+    return std::unique_ptr<Surface>(new AndroidSurface(cache, _width, _height, toPixels(_width, getDisplayScale()), toPixels(_height, getDisplayScale()), _num_channels));
+  }
+  std::unique_ptr<Surface> createSurface(PixelSize size, unsigned int _num_channels) override {
+    return std::unique_ptr<Surface>(new AndroidSurface(cache, size.width / getDisplayScale(), size.height / getDisplayScale(), size.width, size.height, _num_channels));
   }
 
   Surface & getDefaultSurface() override {
@@ -679,8 +687,13 @@ public:
     return std::unique_ptr<Context>(new ContextAndroid(cache.get(), width, height, num_channels, getDisplayScale()));
   }
   std::unique_ptr<Surface> createSurface(unsigned int width, unsigned int height, unsigned int num_channels) override {
-    unsigned int aw = width * getDisplayScale(), ah = height * getDisplayScale();
-    return std::unique_ptr<Surface>(new AndroidSurface(cache.get(), width, height, aw, ah, num_channels));
+    return std::unique_ptr<Surface>(new AndroidSurface(cache.get(), width, height, toPixels(width, getDisplayScale()), toPixels(height, getDisplayScale()), num_channels));
+  }
+  std::unique_ptr<Context> createContext(PixelSize size, unsigned int num_channels) override {
+    return std::unique_ptr<Context>(new ContextAndroid(cache.get(), size, num_channels, getDisplayScale()));
+  }
+  std::unique_ptr<Surface> createSurface(PixelSize size, unsigned int num_channels) override {
+    return std::unique_ptr<Surface>(new AndroidSurface(cache.get(), size.width / getDisplayScale(), size.height / getDisplayScale(), size.width, size.height, num_channels));
   }
 
   std::unique_ptr<Image> loadImage(const std::string & filename) override;
