@@ -72,7 +72,7 @@ namespace canvas {
   public:
     friend class ContextQuartz2D;
         
-  Quartz2DSurface(const std::shared_ptr<Quartz2DCache> & _cache, unsigned int _logical_width, unsigned int _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels)
+  Quartz2DSurface(const std::shared_ptr<Quartz2DCache> & _cache, float _logical_width, float _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels)
     : Surface(_logical_width, _logical_height, _actual_width, _actual_height, _num_channels), cache(_cache) {
       if (_actual_width && _actual_height) {
 	unsigned int bitmapBytesPerRow;
@@ -115,7 +115,7 @@ namespace canvas {
 
     void renderPath(RenderMode mode, const TransformationMatrix & transformation, const Path2D & path, const Style & style, float lineWidth, Operator op, float display_scale, float globalAlpha, float shadowBlur, float shadowOffsetX, float shadowOffsetY, const Color & shadowColor, const Path2D & clipPath, const LineStyle & lineStyle) override;
 
-    void resize(unsigned int _logical_width, unsigned int _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels) override;
+    void resize(float _logical_width, float _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels) override;
     
     void renderText(RenderMode mode, const Font & font, const Style & style, TextBaseline textBaseline, TextAlign textAlign, const std::string & text, const Point & p, float lineWidth, Operator op, float display_scale, float globalAlpha, float shadowBlur, float shadowOffsetX, float shadowOffsetY, const Color & shadowColor, const Path2D & clipPath) override {
       initializeContext();
@@ -332,7 +332,15 @@ namespace canvas {
   ContextQuartz2D(const std::shared_ptr<Quartz2DCache> & _cache, unsigned int _width, unsigned int _height, unsigned int _num_channels, float _display_scale)
     : Context(_display_scale),
       cache(_cache),
-      default_surface(_cache, _width, _height, (unsigned int)(_width * _display_scale), (unsigned int)(_height * _display_scale), _num_channels)
+      default_surface(_cache, _width, _height, toPixels(_width, _display_scale), toPixels(_height, _display_scale), _num_channels)
+      {
+      }
+    // A default surface of exactly size pixels; the logical size is
+    // size / _display_scale.
+    ContextQuartz2D(const std::shared_ptr<Quartz2DCache> & _cache, PixelSize size, unsigned int _num_channels, float _display_scale)
+    : Context(_display_scale),
+      cache(_cache),
+      default_surface(_cache, size.width / _display_scale, size.height / _display_scale, size.width, size.height, _num_channels)
       {
       }
 
@@ -340,7 +348,10 @@ namespace canvas {
         return std::unique_ptr<Surface>(new Quartz2DSurface(cache, image));
     }
     std::unique_ptr<Surface> createSurface(unsigned int _width, unsigned int _height, unsigned int _num_channels) override {
-      return std::unique_ptr<Surface>(new Quartz2DSurface(cache, _width, _height, (unsigned int)(_width * getDisplayScale()), (unsigned int)(_height * getDisplayScale()), _num_channels));
+      return std::unique_ptr<Surface>(new Quartz2DSurface(cache, _width, _height, toPixels(_width, getDisplayScale()), toPixels(_height, getDisplayScale()), _num_channels));
+    }
+    std::unique_ptr<Surface> createSurface(PixelSize size, unsigned int _num_channels) override {
+      return std::unique_ptr<Surface>(new Quartz2DSurface(cache, size.width / getDisplayScale(), size.height / getDisplayScale(), size.width, size.height, _num_channels));
     }
         
     Surface & getDefaultSurface() override { return default_surface; }
@@ -364,9 +375,13 @@ namespace canvas {
       return std::unique_ptr<Context>(new ContextQuartz2D(cache, width, height, num_channels, getDisplayScale()));
     }
     std::unique_ptr<Surface> createSurface(unsigned int width, unsigned int height, unsigned int num_channels) override {
-      unsigned int aw = width * getDisplayScale();
-      unsigned int ah = height * getDisplayScale();
-        return std::unique_ptr<Surface>(new Quartz2DSurface(cache, width, height, aw, ah, num_channels));
+      return std::unique_ptr<Surface>(new Quartz2DSurface(cache, width, height, toPixels(width, getDisplayScale()), toPixels(height, getDisplayScale()), num_channels));
+    }
+    std::unique_ptr<Context> createContext(PixelSize size, unsigned int num_channels) override {
+      return std::unique_ptr<Context>(new ContextQuartz2D(cache, size, num_channels, getDisplayScale()));
+    }
+    std::unique_ptr<Surface> createSurface(PixelSize size, unsigned int num_channels) override {
+      return std::unique_ptr<Surface>(new Quartz2DSurface(cache, size.width / getDisplayScale(), size.height / getDisplayScale(), size.width, size.height, num_channels));
     }
 
     std::unique_ptr<Image> loadImage(const std::string & filename) override;

@@ -37,7 +37,7 @@ namespace canvas {
       return PixelFormat32bppPARGB;
     }
     
-    GDIPlusSurface(unsigned int _logical_width, unsigned int _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels)
+    GDIPlusSurface(float _logical_width, float _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels)
       : Surface(_logical_width, _logical_height, _actual_width, _actual_height, _num_channels) {
       if (_actual_width && _actual_height) {
 	size_t numPixels = _actual_width * _actual_height;
@@ -86,7 +86,7 @@ namespace canvas {
     ~GDIPlusSurface() {
       delete[] storage;
     }
-    void resize(unsigned int _logical_width, unsigned int _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels) override {
+    void resize(float _logical_width, float _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels) override {
       Surface::resize(_logical_width, _logical_height, _actual_width, _actual_height, _num_channels);
       bitmap = std::unique_ptr<Gdiplus::Bitmap>(new Gdiplus::Bitmap(_actual_width, _actual_height, getPixelFormat(_num_channels)));
       g = std::unique_ptr<Gdiplus::Graphics>(nullptr);
@@ -161,9 +161,16 @@ namespace canvas {
   public:
     ContextGDIPlus(unsigned int _width, unsigned int _height, unsigned int _num_channels = 4, float _display_scale = 1.0f)
       : Context(_display_scale),
-	default_surface(_width, _height, (unsigned int)(_display_scale * _width), (unsigned int)(_display_scale * _height), _num_channels)
+	default_surface(_width, _height, toPixels(_width, _display_scale), toPixels(_height, _display_scale), _num_channels)
     {
     
+    }
+    // A default surface of exactly size pixels; the logical size is
+    // size / _display_scale.
+    ContextGDIPlus(PixelSize size, unsigned int _num_channels = 4, float _display_scale = 1.0f)
+      : Context(_display_scale),
+	default_surface(size.width / _display_scale, size.height / _display_scale, size.width, size.height, _num_channels)
+    {
     }
 
     static void initialize() {
@@ -179,7 +186,10 @@ namespace canvas {
       return std::unique_ptr<Surface>(new GDIPlusSurface(image));
     }
     std::unique_ptr<Surface> createSurface(unsigned int _width, unsigned int _height, unsigned int num_channels) override {
-      return std::unique_ptr<Surface>(new GDIPlusSurface(_width, _height, (unsigned int)(_width * getDisplayScale()), (unsigned int)(_height * getDisplayScale()), num_channels));
+      return std::unique_ptr<Surface>(new GDIPlusSurface(_width, _height, toPixels(_width, getDisplayScale()), toPixels(_height, getDisplayScale()), num_channels));
+    }
+    std::unique_ptr<Surface> createSurface(PixelSize size, unsigned int num_channels) override {
+      return std::unique_ptr<Surface>(new GDIPlusSurface(size.width / getDisplayScale(), size.height / getDisplayScale(), size.width, size.height, num_channels));
     }
 
     GDIPlusSurface & getDefaultSurface() override { return default_surface; }
@@ -201,8 +211,13 @@ namespace canvas {
       return std::make_unique<ContextGDIPlus>(width, height, num_channels, getDisplayScale());
     }
     std::unique_ptr<Surface> createSurface(unsigned int width, unsigned int height, unsigned int num_channels = 4) override {
-      unsigned int aw = width * getDisplayScale(), ah = height * getDisplayScale();
-      return std::make_unique<GDIPlusSurface>(width, height, aw, ah, num_channels);
+      return std::make_unique<GDIPlusSurface>(float(width), float(height), toPixels(width, getDisplayScale()), toPixels(height, getDisplayScale()), num_channels);
+    }
+    std::unique_ptr<Context> createContext(PixelSize size, unsigned int num_channels = 4) override {
+      return std::make_unique<ContextGDIPlus>(size, num_channels, getDisplayScale());
+    }
+    std::unique_ptr<Surface> createSurface(PixelSize size, unsigned int num_channels = 4) override {
+      return std::make_unique<GDIPlusSurface>(size.width / getDisplayScale(), size.height / getDisplayScale(), size.width, size.height, num_channels);
     }
     std::unique_ptr<Image> loadImage(const std::string & filename) override;
     std::unique_ptr<Image> createImage() override;

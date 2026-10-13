@@ -128,7 +128,7 @@ AndroidCache::~AndroidCache() {
 
 }
 
-AndroidSurface::AndroidSurface(AndroidCache * _cache, unsigned int _logical_width, unsigned int _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels)
+AndroidSurface::AndroidSurface(AndroidCache * _cache, float _logical_width, float _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels)
   : Surface(_logical_width, _logical_height, _actual_width, _actual_height, _num_channels), cache(_cache), paint(_cache) {
   // creates an empty canvas
 

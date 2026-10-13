@@ -23,14 +23,14 @@ namespace canvas {
     virtual ~Image() = default;
 
     void decode(const void * buffer, size_t size);
-    void scale(unsigned int target_width, unsigned int target_height) {
+    // The target size is logical (it may be fractional, as a surface's
+    // logical size can be); the pixels are rounded down as for surfaces.
+    void scale(float target_width, float target_height) {
       if (!filename.empty() && !data.get()) {
 	loadFile();
       }
       if (data.get()) {
-	auto width = (unsigned int)(target_width * display_scale);
-	auto height = (unsigned int)(target_height * display_scale);
-	data = data->scale(width, height);
+	data = data->scale(toPixels(target_width), toPixels(target_height));
       }
     }
 
@@ -66,6 +66,12 @@ namespace canvas {
     static bool isXML(const unsigned char * buffer, size_t size);
 
   protected:
+    // Matches canvas::toPixels() in Surface.h.
+    unsigned int toPixels(float logical) const {
+      double v = double(logical) * display_scale;
+      return v > 0.0 ? (unsigned int)(v + 1e-4) : 0;
+    }
+
     static std::unique_ptr<ImageData> loadFromMemory(const void * buffer, size_t size);
     static std::unique_ptr<ImageData> loadFromFile(const std::string & filename);
     virtual void loadFile() { }

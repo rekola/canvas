@@ -15,8 +15,10 @@ namespace canvas {
   // The Quartz context takes a shared cache; the tests don't care.
   class TestContext : public ContextQuartz2D {
   public:
-    TestContext(unsigned int w, unsigned int h, unsigned int channels = 4)
-      : ContextQuartz2D(std::make_shared<Quartz2DCache>(), w, h, channels, 1.0f) { }
+    TestContext(unsigned int w, unsigned int h, unsigned int channels = 4, float scale = 1.0f)
+      : ContextQuartz2D(std::make_shared<Quartz2DCache>(), w, h, channels, scale) { }
+    TestContext(PixelSize size, unsigned int channels = 4, float scale = 1.0f)
+      : ContextQuartz2D(std::make_shared<Quartz2DCache>(), size, channels, scale) { }
   };
   typedef Quartz2DContextFactory TestFactory;
 }
@@ -45,6 +47,14 @@ static Px pixel(Context & ctx, unsigned x, unsigned y) {
 }
 
 static bool close_to(int a, int b, int tol = 2) { return std::abs(a - b) <= tol; }
+static bool near(double a, double b) { return std::abs(a - b) < 1e-3; }
+
+// The alpha of a column, summed over all rows.
+static int columnCoverage(Context & ctx, unsigned x) {
+  int sum = 0;
+  for (unsigned y = 0; y < ctx.getActualHeight(); y++) sum += pixel(ctx, x, y).a;
+  return sum;
+}
 
 // Opens a file whose name is UTF-8 (the Windows fopen() would read it as ANSI).
 static FILE * openUtf8(const char * path) {
@@ -456,6 +466,118 @@ int main() {
       }
     CHECK(distinct > 20);  // not flat
     CHECK(worst <= 24);    // and the same picture
+  }
+  for (float scale : { 1.25f, 1.5f }) {  // An exact pixel size at a fractional scale.
+    TestContext ctx(PixelSize{ 101, 37 }, 4, scale);
+    CHECK(ctx.getActualWidth() == 101 && ctx.getActualHeight() == 37);
+    CHECK(near(ctx.getWidth(), 101 / scale) && near(ctx.getHeight(), 37 / scale));
+    auto img = ctx.getDefaultSurface().createImage(scale);
+    CHECK(img->getData().getWidth() == 101 && img->getData().getHeight() == 37);
+    auto surface = ctx.createSurface(PixelSize{ 101, 37 }, 4);
+    CHECK(surface->getActualWidth() == 101 && surface->getActualHeight() == 37);
+    CHECK(near(surface->getLogicalWidth(), 101 / scale));
+    ctx.resize(PixelSize{ 50, 31 });
+    CHECK(ctx.getActualWidth() == 50 && ctx.getActualHeight() == 31);
+    CHECK(near(ctx.getWidth(), 50 / scale) && near(ctx.getHeight(), 31 / scale));
+    TestFactory factory(scale, nullptr);
+    auto from_factory = factory.createContext(PixelSize{ 101, 37 }, 4);
+    CHECK(from_factory->getActualWidth() == 101 && from_factory->getActualHeight() == 37);
+    CHECK(factory.createSurface(PixelSize{ 7, 3 }, 4)->getActualWidth() == 7);
+    // An Image resized to a fractional logical size gets the same pixels.
+    Image image(scale);
+    image.getDataPtr() = std::make_unique<ImageData>(4, 4, 4);
+    image.scale(101 / scale, 37 / scale);
+    CHECK(image.getData().getWidth() == 101 && image.getData().getHeight() == 37);
+  }
+  {  // The size in logical units still rounds the pixels down, as before.
+    TestContext ctx(81, 30, 4, 1.25f);
+    CHECK(ctx.getActualWidth() == 101 && ctx.getActualHeight() == 37 && ctx.getWidth() == 81);
+  }
+  {  // Logical coordinates land on the right pixels at a fractional scale:
+     // at 1.25, logical 4..12 is device 5..15, and the logical size reaches
+     // the last pixel.
+    TestContext ctx(PixelSize{ 101, 37 }, 4, 1.25f);
+    ctx.fillStyle = "#ff0000";
+    ctx.fillRect(4, 4, 8, 8);
+    CHECK(pixel(ctx, 5, 5).a == 255 && pixel(ctx, 14, 14).a == 255);
+    CHECK(pixel(ctx, 4, 5).a == 0 && pixel(ctx, 5, 4).a == 0 && pixel(ctx, 15, 14).a == 0 && pixel(ctx, 14, 15).a == 0);
+    ctx.fillStyle = "#0000ff";
+    ctx.fillRect(ctx.getWidth() - 0.8, ctx.getHeight() - 0.8, 0.8, 0.8);  // the last pixel
+    CHECK(pixel(ctx, 100, 36).b == 255 && pixel(ctx, 100, 36).a == 255);
+    CHECK(pixel(ctx, 99, 36).a == 0 && pixel(ctx, 100, 35).a == 0);
+  }
+  {  // drawImage() of a pixel-sized surface at its logical size copies it 1:1.
+    TestContext src(PixelSize{ 10, 10 }, 4, 1.25f);
+    src.fillStyle = "#00ff00";
+    src.fillRect(0, 0, src.getWidth(), src.getHeight());
+    TestContext ctx(PixelSize{ 101, 37 }, 4, 1.25f);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(src, 4, 4, src.getWidth(), src.getHeight());
+    CHECK(pixel(ctx, 5, 5).g == 255 && pixel(ctx, 14, 14).g == 255 && pixel(ctx, 14, 14).a == 255);
+    CHECK(pixel(ctx, 4, 5).a == 0 && pixel(ctx, 15, 14).a == 0 && pixel(ctx, 14, 15).a == 0);
+  }
+  {  // A shadow on a pixel-sized surface is offset in logical units.
+    TestContext ctx(PixelSize{ 101, 37 }, 4, 1.25f);
+    ctx.shadowColor = Color(1.0f, 0.0f, 0.0f, 1.0f);
+    ctx.shadowOffsetX = 8;  // 10 px
+    ctx.fillStyle = "#0000ff";
+    ctx.fillRect(4, 4, 4, 4);  // device 5..10
+    Px shadow = pixel(ctx, 17, 7), shape = pixel(ctx, 7, 7);
+    CHECK(shadow.r > 200 && shadow.b < 50);
+    CHECK(shape.b == 255);
+    CHECK(pixel(ctx, 22, 7).a < 50);
+  }
+  for (float scale : { 1.0f, 1.5f, 2.0f }) {  // lineWidth 0 is a one-pixel hairline at any scale.
+    TestContext ctx(PixelSize{ 16, 16 }, 4, scale);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 0.0f;
+    // On a device pixel centre it is one crisp row.
+    ctx.beginPath().moveTo(0, 5.5 / scale).lineTo(16, 5.5 / scale).stroke();
+    CHECK(pixel(ctx, 4, 5).a == 255 && pixel(ctx, 4, 4).a == 0 && pixel(ctx, 4, 6).a == 0);
+    // Anywhere else it still covers one pixel in total: device 9.75..10.75.
+    ctx.beginPath().moveTo(10.25 / scale, 0).lineTo(10.25 / scale, 16).stroke();
+    CHECK(close_to(pixel(ctx, 9, 12).a, 64, 3) && close_to(pixel(ctx, 10, 12).a, 191, 3));
+    CHECK(pixel(ctx, 8, 12).a == 0 && pixel(ctx, 11, 12).a == 0);
+    // A normal line scales with the display.
+    TestContext wide(PixelSize{ 16, 16 }, 4, scale);
+    wide.strokeStyle = "#ffffff";
+    wide.lineWidth = 1.0f;
+    wide.beginPath().moveTo(8 / scale, 0).lineTo(8 / scale, 16).stroke();
+    CHECK(close_to(pixel(wide, 7, 8).a + pixel(wide, 8, 8).a, int(255 * scale), 3));
+    CHECK(pixel(wide, 6, 8).a == 0 && pixel(wide, 9, 8).a == 0);
+  }
+  {  // A hairline ignores a scaling transform; a normal line follows it.
+    for (float scale : { 1.0f, 2.0f }) {
+      TestContext ctx(PixelSize{ 32, 32 }, 4, scale);
+      ctx.strokeStyle = "#ffffff";
+      ctx.scale(4, 4);
+      ctx.lineWidth = 0.0f;
+      ctx.beginPath().moveTo(0, 5.5 / 4 / scale).lineTo(8, 5.5 / 4 / scale).stroke();
+      CHECK(pixel(ctx, 10, 5).a == 255 && pixel(ctx, 10, 4).a == 0 && pixel(ctx, 10, 6).a == 0);
+      ctx.lineWidth = 1.0f;  // 4 * scale px wide
+      ctx.beginPath().moveTo(0, 20.0 / 4 / scale).lineTo(8, 20.0 / 4 / scale).stroke();
+      int rows = 0;
+      for (unsigned y = 10; y < 32; y++) rows += pixel(ctx, 10, y).a == 255;
+      CHECK(rows == int(4 * scale));
+      // The line settings still apply: a dashed hairline has gaps.
+      ctx.setLineDash({ 1.0f, 1.0f });
+      ctx.lineWidth = 0.0f;
+      ctx.beginPath().moveTo(0.5 / 4 / scale, 0).lineTo(0.5 / 4 / scale, 8).stroke();
+      CHECK(pixel(ctx, 0, int(1 * scale)).a == 255 && pixel(ctx, 0, int(6 * scale)).a == 0);
+      CHECK(pixel(ctx, 1, int(1 * scale)).a == 0);
+    }
+  }
+  {  // A hairline strokes text too, and the same stroke at lineWidth 1 is no thinner.
+    TestContext thin(64, 32, 4, 2.0f), thick(64, 32, 4, 2.0f);
+    for (auto * ctx : { &thin, &thick }) {
+      ctx->strokeStyle = "#ffffff";
+      ctx->font.size = 24;
+      ctx->lineWidth = ctx == &thin ? 0.0f : 1.0f;
+      ctx->strokeText("W", 4, 24);
+    }
+    int a = 0, b = 0;
+    for (unsigned x = 0; x < 128; x++) { a += columnCoverage(thin, x); b += columnCoverage(thick, x); }
+    CHECK(a > 0 && a <= b);
   }
   return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }

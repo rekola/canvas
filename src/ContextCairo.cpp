@@ -59,7 +59,7 @@ static pair<cairo_surface_t *, unsigned int *> initializeSurfaceFromData(const I
   return std::pair<cairo_surface_t *, unsigned int *>(surface, storage);
 }
 
-CairoSurface::CairoSurface(unsigned int _logical_width, unsigned int _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels)
+CairoSurface::CairoSurface(float _logical_width, float _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels)
   : Surface(_logical_width, _logical_height, _actual_width, _actual_height, _num_channels) {
   if (_actual_width && _actual_height) {
     surface = cairo_image_surface_create(getCairoFormat(_num_channels), _actual_width, _actual_height);
@@ -100,7 +100,7 @@ CairoSurface::markDirty() {
 }
 
 void
-CairoSurface::resize(unsigned int _logical_width, unsigned int _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels) {
+CairoSurface::resize(float _logical_width, float _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels) {
   Surface::resize(_logical_width, _logical_height, _actual_width, _actual_height, _num_channels);
   if (cr) {
     cairo_destroy(cr);

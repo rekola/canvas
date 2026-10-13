@@ -29,11 +29,24 @@ namespace canvas {
     STROKE
   };
 
+  // A size in device pixels, for asking for an exact surface size: the
+  // logical size is then width / display_scale, possibly fractional.
+  struct PixelSize {
+    unsigned int width = 0, height = 0;
+  };
+
+  // The pixels a logical size covers, rounded down. The small epsilon keeps
+  // a product such as 80.8f * 1.25f from losing a pixel to float error.
+  inline unsigned int toPixels(double logical, float display_scale) {
+    double v = logical * display_scale;
+    return v > 0.0 ? (unsigned int)(v + 1e-4) : 0;
+  }
+
   class Surface {
   public:
     friend class Context;
 
-  Surface(unsigned int _logical_width, unsigned int _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels) :
+  Surface(float _logical_width, float _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels) :
     logical_width(_logical_width),
       logical_height(_logical_height),
       actual_width(_actual_width),
@@ -45,7 +58,7 @@ namespace canvas {
     Surface & operator=(const Surface & other) = delete;
     virtual ~Surface() = default;
 
-    virtual void resize(unsigned int _logical_width, unsigned int _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels) {
+    virtual void resize(float _logical_width, float _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels) {
       logical_width = _logical_width;
       logical_height = _logical_height;
       actual_width = _actual_width;
@@ -83,8 +96,10 @@ namespace canvas {
       return readPixels()->colorize(color);
     }
 
-    unsigned int getLogicalWidth() const { return logical_width; }
-    unsigned int getLogicalHeight() const { return logical_height; }
+    // The size in logical units: actual size / display scale. Fractional
+    // when the surface was given a pixel size at a fractional scale.
+    float getLogicalWidth() const { return logical_width; }
+    float getLogicalHeight() const { return logical_height; }
     unsigned int getActualWidth() const { return actual_width; }
     unsigned int getActualHeight() const { return actual_height; }
     unsigned int getNumChannels() const { return num_channels; }
@@ -116,7 +131,8 @@ namespace canvas {
     virtual void releaseMemory() = 0;
 
   private:
-    unsigned int logical_width, logical_height, actual_width, actual_height, num_channels;
+    float logical_width, logical_height;
+    unsigned int actual_width, actual_height, num_channels;
   };
 };
 

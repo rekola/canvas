@@ -111,6 +111,47 @@ at .5. A 1 px line on an integer coordinate is antialiased over two rows; put
 it on a .5 coordinate to get one crisp row. Fills with integer edges, and
 images drawn at integer positions and native size, are exact.
 
+Display scale
+=============
+
+A context's size and coordinates are logical units; the display scale
+(`ContextCairo(width, height, channels, scale)`, or the factory's) is how
+many pixels a unit covers. Backends multiply coordinates, line widths, font
+sizes, gradients, dashes and shadows by it. Given a logical size, the surface
+gets `logical * scale` pixels, rounded down.
+
+To get an exact pixel size, such as an image covering N terminal cells at a
+fractional scale, give a `PixelSize` instead: the logical size is then
+`pixels / scale` and may be fractional.
+
+    ContextCairo context(PixelSize{ 101, 37 }, 4, 1.25f);  // 101 x 37 pixels
+    context.getWidth();         // 80.8 logical units
+    context.getActualWidth();   // 101
+    context.resize(PixelSize{ 120, 40 });
+    auto layer = context.createSurface(PixelSize{ 20, 20 }, 4);
+
+`getWidth()`/`getHeight()` and `Surface::getLogicalWidth()`/`getLogicalHeight()`
+are `float`s for this reason; they are whole numbers for a context made from a
+logical size. Factories have `createContext(PixelSize)` and
+`createSurface(PixelSize)`, and `Image::scale()` takes a fractional logical size. A backend
+implements these overloads, and its `Surface` subclass takes `float` logical
+sizes in its constructor and `resize()`.
+
+Hairlines
+=========
+
+`lineWidth = 0` is a hairline: one device pixel wide whatever the display
+scale and transform, for grid lines, ticks and borders that must not thicken
+on a high-DPI display. This is how PostScript, Quartz and GDI+ treat a zero
+width; HTML5 ignores 0 instead. It works for `stroke()`, `strokeRect()` and
+`strokeText()`, and the other line settings (caps, joins, dashes) still apply.
+Dash lengths stay in user units.
+
+To keep a hairline crisp, put it on a device pixel centre: logical
+`(n + 0.5) / scale` without a transform.
+
+    context.lineWidth(0.0f).beginPath().moveTo(0, 5.5 / scale).lineTo(width, 5.5 / scale).stroke();
+
 Linux
 =====
 
