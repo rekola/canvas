@@ -573,7 +573,8 @@ int main() {
       ctx->strokeStyle = "#ffffff";
       ctx->font.size = 24;
       ctx->lineWidth = ctx == &thin ? 0.0f : 1.0f;
-      ctx->strokeText("W", 4, 24);
+      ctx->textBaseline = TextBaseline::TOP;  // GDI+ draws from the top; keep the glyph on the surface
+      ctx->strokeText("W", 4, 4);
     }
     int a = 0, b = 0;
     for (unsigned x = 0; x < 128; x++) { a += columnCoverage(thin, x); b += columnCoverage(thick, x); }

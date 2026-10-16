@@ -253,7 +253,15 @@ GDIPlusSurface::renderPath(RenderMode mode, const TransformationMatrix & transfo
 	pen.SetDashPattern(dash.data(), (INT)dash.size());
 	pen.SetDashOffset(transformation.transformSize(lineStyle.dashOffset) * display_scale / width);
       }
-      g->DrawPath(&pen, &path);
+      // DrawPath() snaps antialiased pens of about 1.25..1.5 px to 1 px;
+      // filling the widened outline covers the exact width.
+      Gdiplus::GraphicsPath outline;
+      outline.AddPath(&path, FALSE);
+      if (outline.Widen(&pen) == Gdiplus::Ok) {
+        g->FillPath(brush.get(), &outline);
+      } else {
+        g->DrawPath(&pen, &path);
+      }
     }
     break;
   case RenderMode::FILL:
