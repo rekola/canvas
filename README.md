@@ -1,7 +1,7 @@
 canvas
 ======
 
-[![Linux](https://github.com/rekola/canvas/actions/workflows/ci-linux.yml/badge.svg)](https://github.com/rekola/canvas/actions/workflows/ci-linux.yml) [![macOS](https://github.com/rekola/canvas/actions/workflows/ci-macos.yml/badge.svg)](https://github.com/rekola/canvas/actions/workflows/ci-macos.yml) [![Windows](https://github.com/rekola/canvas/actions/workflows/ci-windows.yml/badge.svg)](https://github.com/rekola/canvas/actions/workflows/ci-windows.yml)
+[![Linux](https://github.com/rekola/canvas/actions/workflows/ci-linux.yml/badge.svg)](https://github.com/rekola/canvas/actions/workflows/ci-linux.yml) [![Linux ARM](https://github.com/rekola/canvas/actions/workflows/ci-linux-arm.yml/badge.svg)](https://github.com/rekola/canvas/actions/workflows/ci-linux-arm.yml) [![macOS](https://github.com/rekola/canvas/actions/workflows/ci-macos.yml/badge.svg)](https://github.com/rekola/canvas/actions/workflows/ci-macos.yml) [![Windows](https://github.com/rekola/canvas/actions/workflows/ci-windows.yml/badge.svg)](https://github.com/rekola/canvas/actions/workflows/ci-windows.yml)
 
 A C++17 implementation of the HTML5 Canvas 2D API, drawing with each platform's own 2D library: Cairo on Linux, GDI+ on Windows, Quartz 2D on Apple platforms and Android Canvas on Android. It draws into memory and hands the pixels out as `ImageData`, so it can be used to render charts, meters and textures.
 
