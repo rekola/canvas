@@ -47,7 +47,7 @@ static Px pixel(Context & ctx, unsigned x, unsigned y) {
 }
 
 static bool close_to(int a, int b, int tol = 2) { return std::abs(a - b) <= tol; }
-static bool near(double a, double b) { return std::abs(a - b) < 1e-3; }
+static bool approxEq(double a, double b) { return std::abs(a - b) < 1e-3; }
 
 // The alpha of a column, summed over all rows.
 static int columnCoverage(Context & ctx, unsigned x) {
@@ -470,15 +470,15 @@ int main() {
   for (float scale : { 1.25f, 1.5f }) {  // An exact pixel size at a fractional scale.
     TestContext ctx(PixelSize{ 101, 37 }, 4, scale);
     CHECK(ctx.getActualWidth() == 101 && ctx.getActualHeight() == 37);
-    CHECK(near(ctx.getWidth(), 101 / scale) && near(ctx.getHeight(), 37 / scale));
+    CHECK(approxEq(ctx.getWidth(), 101 / scale) && approxEq(ctx.getHeight(), 37 / scale));
     auto img = ctx.getDefaultSurface().createImage(scale);
     CHECK(img->getData().getWidth() == 101 && img->getData().getHeight() == 37);
     auto surface = ctx.createSurface(PixelSize{ 101, 37 }, 4);
     CHECK(surface->getActualWidth() == 101 && surface->getActualHeight() == 37);
-    CHECK(near(surface->getLogicalWidth(), 101 / scale));
+    CHECK(approxEq(surface->getLogicalWidth(), 101 / scale));
     ctx.resize(PixelSize{ 50, 31 });
     CHECK(ctx.getActualWidth() == 50 && ctx.getActualHeight() == 31);
-    CHECK(near(ctx.getWidth(), 50 / scale) && near(ctx.getHeight(), 31 / scale));
+    CHECK(approxEq(ctx.getWidth(), 50 / scale) && approxEq(ctx.getHeight(), 31 / scale));
     TestFactory factory(scale, nullptr);
     auto from_factory = factory.createContext(PixelSize{ 101, 37 }, 4);
     CHECK(from_factory->getActualWidth() == 101 && from_factory->getActualHeight() == 37);
