@@ -543,6 +543,7 @@ int main() {
     wide.strokeStyle = "#ffffff";
     wide.lineWidth = 1.0f;
     wide.beginPath().moveTo(8 / scale, 0).lineTo(8 / scale, 16).stroke();
+    std::printf("scale %g wide line alpha x=6..9: %d %d %d %d\n", scale, pixel(wide, 6, 8).a, pixel(wide, 7, 8).a, pixel(wide, 8, 8).a, pixel(wide, 9, 8).a);
     CHECK(close_to(pixel(wide, 7, 8).a + pixel(wide, 8, 8).a, int(255 * scale), 3));
     CHECK(pixel(wide, 6, 8).a == 0 && pixel(wide, 9, 8).a == 0);
   }
@@ -577,6 +578,7 @@ int main() {
     }
     int a = 0, b = 0;
     for (unsigned x = 0; x < 128; x++) { a += columnCoverage(thin, x); b += columnCoverage(thick, x); }
+    std::printf("hairline text coverage %d, lineWidth 1 coverage %d\n", a, b);
     CHECK(a > 0 && a <= b);
   }
   return failures ? EXIT_FAILURE : EXIT_SUCCESS;
