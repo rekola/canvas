@@ -36,24 +36,12 @@ namespace canvas {
       bool is_italic = font.style == Font::ITALIC;
       std::string key = font.family + "/" + std::to_string(size) + "/" + (is_bold ? "bold" : "") + "/" + (is_italic ? "italic" : "");
       auto it = fonts.find(key);
-      if (it != fonts.end()) {
-        return it->second;
-      } else {
-        CTFontRef font2;
-        if (is_italic && is_bold) {
-          font2 = CTFontCreateWithName(CFSTR("Arial-BoldItalicMT"), size, NULL);
-        } else if (is_bold) {
-          font2 = CTFontCreateWithName(CFSTR("Arial-BoldMT"), size, NULL);
-        } else if (is_italic) {
-          font2 = CTFontCreateWithName(CFSTR("Arial-ItalicMT"), size, NULL);
-        } else {
-          font2 = CTFontCreateWithName(CFSTR("ArialMT"), size, NULL);
-        }
-        fonts[key] = font2;
-        return font2;
-      }
+      if (it != fonts.end()) return it->second;
+      CTFontRef font2 = createFont(font.family, size, is_bold, is_italic);
+      fonts[key] = font2;
+      return font2;
     }
-    
+
     CGColorSpaceRef & getColorSpace() {
       if (!colorspace) colorspace = CGColorSpaceCreateDeviceRGB();
       return colorspace;
@@ -64,6 +52,54 @@ namespace canvas {
     }
     
   private:
+    static bool isNamed(CTFontRef font, CFStringRef name) {
+      bool found = false;
+      CFStringRef names[] = { CTFontCopyFamilyName(font), CTFontCopyPostScriptName(font), CTFontCopyFullName(font) };
+      for (CFStringRef n : names) {
+        if (!n) continue;
+        found = found || CFStringCompare(n, name, kCFCompareCaseInsensitive) == kCFCompareEqualTo;
+        CFRelease(n);
+      }
+      return found;
+    }
+
+    // The CSS generic names and any installed family; sans-serif (the default)
+    // and a family that is not installed stay Arial.
+    static CTFontRef createFont(const std::string & family, float size, bool is_bold, bool is_italic) {
+      CTFontRef base = 0;
+      if (family == "monospace") {
+        base = CTFontCreateUIFontForLanguage(kCTFontUIFontUserFixedPitch, size, NULL);
+      } else if (family == "serif") {
+        base = CTFontCreateWithName(CFSTR("TimesNewRomanPSMT"), size, NULL);
+      } else if (!family.empty() && family != "sans-serif") {
+        CFStringRef name = CFStringCreateWithCString(NULL, family.c_str(), kCFStringEncodingUTF8);
+        if (name) {
+          base = CTFontCreateWithName(name, size, NULL);
+          // CoreText answers an unknown name with a default font: not a match.
+          if (base && !isNamed(base, name)) {
+            CFRelease(base);
+            base = 0;
+          }
+          CFRelease(name);
+        }
+      }
+      if (base) {
+        CTFontSymbolicTraits traits = (is_bold ? kCTFontBoldTrait : 0) | (is_italic ? kCTFontItalicTrait : 0);
+        if (traits) {
+          CTFontRef styled = CTFontCreateCopyWithSymbolicTraits(base, size, NULL, traits, traits);
+          if (styled) {
+            CFRelease(base);
+            base = styled;
+          }
+        }
+        return base;
+      }
+      if (is_italic && is_bold) return CTFontCreateWithName(CFSTR("Arial-BoldItalicMT"), size, NULL);
+      if (is_bold) return CTFontCreateWithName(CFSTR("Arial-BoldMT"), size, NULL);
+      if (is_italic) return CTFontCreateWithName(CFSTR("Arial-ItalicMT"), size, NULL);
+      return CTFontCreateWithName(CFSTR("ArialMT"), size, NULL);
+    }
+
     CGColorSpaceRef colorspace = 0, colorspace_gray = 0;
     std::unordered_map<std::string, CTFontRef> fonts;
   };
