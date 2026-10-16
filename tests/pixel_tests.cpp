@@ -580,5 +580,20 @@ int main() {
     for (unsigned x = 0; x < 128; x++) { a += columnCoverage(thin, x); b += columnCoverage(thick, x); }
     CHECK(a > 0 && a <= b);
   }
+#ifdef CANVAS_HAS_QUARTZ
+  {  // The font family is honoured: monospace has one advance for every letter, the default does not.
+    TestContext ctx(64, 32);
+    ctx.font.size = 24;
+    ctx.font.family = "sans-serif";
+    float sans_i = ctx.measureText("iiii").width, sans_m = ctx.measureText("MMMM").width;
+    ctx.font.family = "monospace";
+    float mono_i = ctx.measureText("iiii").width, mono_m = ctx.measureText("MMMM").width;
+    CHECK(sans_m > sans_i + 1.0f);
+    CHECK(std::abs(mono_i - mono_m) < 0.5f && mono_i > 0.0f);
+    // A family that is not installed is the default font.
+    ctx.font.family = "No Such Family 123";
+    CHECK(std::abs(ctx.measureText("MMMM").width - sans_m) < 0.01f);
+  }
+#endif
   return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }
