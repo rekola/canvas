@@ -547,6 +547,17 @@ int main() {
     CHECK(close_to(pixel(wide, 7, 8).a + pixel(wide, 8, 8).a, int(255 * scale), 3));
     CHECK(pixel(wide, 6, 8).a == 0 && pixel(wide, 9, 8).a == 0);
   }
+  {  // Diagnosis: total coverage of a vertical line across fractional widths.
+    for (float w : { 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f }) {
+      TestContext ctx(PixelSize{ 16, 16 }, 4, 1.0f);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = w;
+      ctx.beginPath().moveTo(8, 0).lineTo(8, 16).stroke();
+      int sum = 0;
+      for (unsigned x = 0; x < 16; x++) sum += pixel(ctx, x, 8).a;
+      std::printf("width %g covers %d/255 px\n", w, sum);
+    }
+  }
   {  // A hairline ignores a scaling transform; a normal line follows it.
     for (float scale : { 1.0f, 2.0f }) {
       TestContext ctx(PixelSize{ 32, 32 }, 4, scale);
@@ -574,7 +585,8 @@ int main() {
       ctx->strokeStyle = "#ffffff";
       ctx->font.size = 24;
       ctx->lineWidth = ctx == &thin ? 0.0f : 1.0f;
-      ctx->strokeText("W", 4, 24);
+      ctx->textBaseline = TextBaseline::TOP;  // GDI+ draws from the top; keep the glyph on the surface
+      ctx->strokeText("W", 4, 4);
     }
     int a = 0, b = 0;
     for (unsigned x = 0; x < 128; x++) { a += columnCoverage(thin, x); b += columnCoverage(thick, x); }
