@@ -53,6 +53,8 @@ namespace canvas {
     // whatever format it says it is in.
     GDIPlusSurface(const ImageData & image) : Surface(image.getWidth(), image.getHeight(), image.getWidth(), image.getHeight(), image.getNumChannels())
     {
+      // GDI+ has no float bitmaps; use the Direct2D backend for float colour.
+      if (image.isFloat()) throw UnsupportedFormatException("GDI+ has no float images");
       size_t numPixels = size_t(image.getWidth()) * image.getHeight();
       unsigned int channels = image.getNumChannels();
       bool bgr = image.getChannelOrder() == ChannelOrder::BGR, premultiplied = image.isPremultiplied();

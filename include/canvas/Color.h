@@ -4,6 +4,19 @@
 #include <string>
 
 namespace canvas {
+  // Red, green, blue and alpha as floats. Strings give 0 to 1 values, and
+  // the components may be set to anything: a float surface (PixelType::FLOAT32)
+  // draws the numbers it is given, unclamped.
+  //
+  // Canvas does not interpret the colour space. It blends, anti-aliases and
+  // interpolates gradients by arithmetic on the components, and applies no
+  // transfer function, primaries conversion or tone mapping. A client that
+  // wants physically correct blending supplies linear-light values (for
+  // example linear Rec.2020 with 1.0 as SDR white, where HDR is above 1);
+  // gamma-encoded values blend as gamma-encoded numbers. Alpha is never a
+  // colour: it is a coverage in [0, 1]. Colours are straight (not
+  // premultiplied); gradient stops are interpolated in that straight form.
+  // 8-bit surfaces clamp to [0, 1] as always.
   class Color {
   public:
     static Color BLACK, WHITE, RED;

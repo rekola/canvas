@@ -53,6 +53,16 @@ without a backend. Add a pixel test with every behaviour change.
   `drawImage` converts. State the format whenever an API hands out pixels:
   clients (the terminal's Sixel and Kitty output, the sub-cell quantizer)
   read it directly.
+- **Float colour.** `PixelType::FLOAT32` surfaces (`Surface::getPixelType()`,
+  `Context::supportsPixelType()`) draw `Color` components as given: no
+  clamping, no transfer function, no colour management; callers supply
+  linear values (README, "Float colour"). Read-back is FLOAT32 `ImageData`
+  tagged like the 8-bit one (Cairo/Quartz: RGB, premultiplied). Cairo clamps
+  its colour inputs, so `CairoSurface` stores float pixels divided by a
+  power-of-two headroom; keep every colour going into Cairo on a float
+  surface divided by `headroom` (`setSolidSource`, gradient stops,
+  `ensureHeadroom()`), and use `CAIRO_FILTER_GOOD` there (BEST is lossy).
+  8-bit output must stay byte-identical. Float tests: `tests/float_tests.cpp`.
 - **State follows HTML5 too.** `save()`/`restore()` cover the drawing
   state (styles, transform, clip, line settings) but not the current path.
   Every setter, transform and path call returns `Context&`, so calls
@@ -92,6 +102,10 @@ without a backend. Add a pixel test with every behaviour change.
   else is opaque black, never an assert.
 
 ## Known gaps
+
+- Float surfaces: Cairo (1.17.2+) and Quartz (macOS) only. The Quartz path
+  is not run locally (CI only, and only on a pull request). GDI+ has none;
+  the Direct2D backend that replaces it is not in this repository.
 
 - Intersecting clips works on flattened polygons and needs one of each
   pair convex (rectangles, circles); two concave clips replace instead.

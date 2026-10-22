@@ -74,6 +74,85 @@ them. An `ImageData` is straight RGBA unless set otherwise:
 `drawImage()` converts from the image's format, so a loaded PNG with alpha
 draws correctly.
 
+Float colour (HDR)
+==================
+
+A surface can hold 32-bit floats instead of bytes, so colours above 1 and in
+the dark range survive:
+
+    ContextCairo context(PixelSize{ 640, 360 }, 4, 1.0f, PixelType::FLOAT32);
+    context.fillStyle(Color(4.0f, 0.001f, 0.25f, 1.0f)).fillRect(0, 0, 64, 64);
+    auto pixels = context.getDefaultSurface().getImageData();   // PixelType::FLOAT32
+
+`PixelType::UINT8` (the default) is the 8-bit API, unchanged. Ask
+`Context::supportsPixelType()` or `ContextFactory::supportsPixelType()`
+first; `createSurface(PixelSize, channels, PixelType)` and
+`ContextFactory::createContext(PixelSize, channels, PixelType)` throw
+`UnsupportedFormatException` when there is no such surface (float surfaces are
+4 channel RGBA only).
+
+**Canvas does not interpret the colour space.** `Color` is four floats, and
+every operation is arithmetic on those numbers: blending (source over, copy),
+anti-aliased edges, clipping, gradient interpolation (of the straight colour,
+then premultiplied), image scaling. No backend applies a transfer function,
+converts primaries or tone maps, and a float surface clamps nothing to [0, 1].
+The caller supplies the values in the space it wants blended in: for physically
+correct blending, linear light (cellui uses linear Rec.2020 with 1.0 as SDR
+white, HDR above 1). Gamma-encoded values blend as gamma-encoded numbers.
+Alpha is a coverage in [0, 1]. 8-bit surfaces clamp colours to [0, 1] as
+before. Bytes drawn on a float surface (`drawImage()` of an 8-bit
+`ImageData`) are `v / 255` as they are, so linearize them first if they are
+encoded, and a float image drawn on a byte surface is clamped.
+
+Read-back keeps the convention that the surface hands out its own layout,
+tagged: `getImageData()` / `createImage()` give `ImageData` with
+`PixelType::FLOAT32` (`getFloatData()`, 4 floats per pixel, rows without
+padding), and on Cairo and Quartz the format is `RGB` order, **premultiplied**.
+`convertTo(ChannelOrder::RGB, false)` makes it straight RGBA; nothing is
+clamped on the way. The pixels are the numbers that were drawn (see the
+precision notes below).
+
+| Backend | Float surface | Notes |
+| --- | --- | --- |
+| Cairo | `CAIRO_FORMAT_RGBA128F` (1.17.2 or later) | See below: Cairo clamps its colour inputs, so canvas scales by a power of two ("headroom") |
+| Quartz 2D | 32-bit float bitmap context, extended linear sRGB | macOS only; every colour, gradient and image is created in that one space, so nothing is converted. Compiled but not run locally; see CI |
+| Direct2D | FP16 render target, scRGB-style linear values | Not in this repository; FP16 is widened to `FLOAT32` on read-back (`Half.h`) |
+| GDI+ | none | `supportsPixelType()` is false; a float `ImageData` throws |
+| Android | none | |
+
+Cairo float surfaces
+--------------------
+
+Tested with Cairo 1.18.0 (pixman 0.42.2):
+
+* Cairo **clamps every colour it is given to [0, 1]** (solid colours, gradient
+  stops, and float image sources), although it stores and blends values above
+  1 in an RGBA128F surface. A float `CairoSurface` therefore keeps its pixels
+  divided by a "headroom": a power of two that grows to the largest straight
+  colour component drawn so far (the stored pixels are rescaled when it does).
+  Premultiplied source-over and copy are linear in the colour channels, and a
+  power of two is exact in float, so the values are bit-identical. Read-back
+  multiplies it back. `CairoSurface::getHeadroom()` tells it; code that reads
+  `lockMemory()` or `getCairoSurface()` sees the stored values.
+* Cairo's solid colours are 16-bit, so a float surface paints solids through a
+  1x1 float image instead (exact). **Gradient stops are 16-bit** in pixman:
+  stops and interpolation carry about `headroom / 65535` of absolute error,
+  and a dark stop is quantized to that.
+* **Anti-aliasing coverage is 8-bit** (Cairo's rasterizer): half coverage
+  gives 128/255 of the value.
+* Image scaling uses `CAIRO_FILTER_GOOD` on float surfaces. `BEST` is a
+  fixed-point convolution that loses the dark range and darkens edges.
+* Works and matches the 8-bit result within rounding: fills, strokes, dashes,
+  anti-aliased and circular clips, text (grayscale and subpixel, glyph paths
+  and `show_text`), linear and radial gradients, `COPY`, `SOURCE_OVER`,
+  `paint_with_alpha`, groups and similar surfaces (they stay RGBA128F), and
+  every Porter-Duff operator.
+* Only the linear operators survive the headroom scaling. The PDF blend modes
+  (multiply, screen, ...) are not scale invariant, and canvas does not use
+  them.
+* No filters (Cairo has none beyond the pattern filter above), no ICC.
+* Cairo without float (before 1.17.2): `supportsPixelType(FLOAT32)` is false.
+
 Image names
 ===========
 

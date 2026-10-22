@@ -18,6 +18,7 @@
 #include <cassert>
 #include <cstring>
 #include <memory>
+#include <stdexcept>
 
 namespace canvas {
   class Context;
@@ -35,6 +36,13 @@ namespace canvas {
     unsigned int width = 0, height = 0;
   };
 
+  // Thrown when a backend cannot make the requested surface, for example a
+  // float surface from a backend or library without one.
+  class UnsupportedFormatException : public std::runtime_error {
+  public:
+    UnsupportedFormatException(const char * what) : std::runtime_error(what) { }
+  };
+
   // The pixels a logical size covers, rounded down. The small epsilon keeps
   // a product such as 80.8f * 1.25f from losing a pixel to float error.
   inline unsigned int toPixels(double logical, float display_scale) {
@@ -46,12 +54,13 @@ namespace canvas {
   public:
     friend class Context;
 
-  Surface(float _logical_width, float _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels) :
+  Surface(float _logical_width, float _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels, PixelType _pixel_type = PixelType::UINT8) :
     logical_width(_logical_width),
       logical_height(_logical_height),
       actual_width(_actual_width),
       actual_height(_actual_height),
-      num_channels(_num_channels)
+      num_channels(_num_channels),
+      pixel_type(_pixel_type)
 	{ }
     
     Surface(const Surface & other) = delete;
@@ -103,18 +112,27 @@ namespace canvas {
     unsigned int getActualWidth() const { return actual_width; }
     unsigned int getActualHeight() const { return actual_height; }
     unsigned int getNumChannels() const { return num_channels; }
+    // UINT8 or FLOAT32. A float surface draws the colour components as
+    // given, unclamped, and reads back as FLOAT32 ImageData (see Color.h).
+    PixelType getPixelType() const { return pixel_type; }
+
+    // A copy of the pixels as ImageData in the surface's own layout: its
+    // pixel type, channel order and premultiplication are set on the
+    // result (Cairo bytes: BGR premultiplied; Cairo and Quartz floats: RGB
+    // premultiplied, the numbers that were drawn).
+    std::unique_ptr<ImageData> getImageData() { return readPixels(); }
     
   protected:
     // What lockMemory() points at: the bytes between the starts of two
     // rows (a backend may pad them), and what the bytes are. By default
     // unpadded and native: premultiplied, BGR order.
-    virtual size_t getMemoryStride() const { return size_t(actual_width) * num_channels; }
+    virtual size_t getMemoryStride() const { return size_t(actual_width) * num_channels * getBytesPerChannel(pixel_type); }
     virtual ChannelOrder getMemoryChannelOrder() const { return ChannelOrder::BGR; }
     virtual bool isMemoryPremultiplied() const { return true; }
 
     // A copy of the pixels as an unpadded ImageData with its format set.
     virtual std::unique_ptr<ImageData> readPixels() {
-      auto r = std::make_unique<ImageData>(actual_width, actual_height, num_channels);
+      auto r = std::make_unique<ImageData>(actual_width, actual_height, num_channels, pixel_type);
       r->setFormat(getMemoryChannelOrder(), isMemoryPremultiplied());
       auto src = (const unsigned char *)lockMemory(false);
       if (src) {
@@ -133,6 +151,7 @@ namespace canvas {
   private:
     float logical_width, logical_height;
     unsigned int actual_width, actual_height, num_channels;
+    PixelType pixel_type;
   };
 };
 

@@ -61,6 +61,17 @@ namespace {
 
 std::vector<unsigned char>
 canvas::quantize(const ImageData & image, const Palette & palette, const DitherOptions & options) {
+  if (image.isFloat()) {
+    // Palettes are 8-bit sRGB-ish terminal colours: float data is clamped to
+    // [0, 1] and scaled to bytes as given (no tone mapping, no transfer).
+    ImageData bytes(image.getWidth(), image.getHeight(), image.getNumChannels());
+    bytes.setFormat(image.getChannelOrder(), image.isPremultiplied());
+    const float * in = image.getFloatData();
+    for (size_t i = 0; i < image.calculateSize() / sizeof(float); i++) {
+      bytes.getData()[i] = (unsigned char)std::lround(255.0f * std::min(1.0f, std::max(0.0f, in[i])));
+    }
+    return quantize(bytes, palette, options);
+  }
   size_t width = image.getWidth(), height = image.getHeight();
   std::vector<unsigned char> out(width * height, 0);
   if (palette.empty() || !image.isValid()) return out;

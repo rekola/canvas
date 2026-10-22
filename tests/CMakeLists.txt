@@ -25,4 +25,8 @@ if(CANVAS_BACKEND_CAIRO OR CANVAS_BACKEND_GDIPLUS OR CANVAS_BACKEND_QUARTZ)
   add_executable(canvas_tests pixel_tests.cpp)
   target_link_libraries(canvas_tests PRIVATE canvas)
   add_test(NAME canvas_pixels COMMAND canvas_tests)
+
+  add_executable(float_tests float_tests.cpp)
+  target_link_libraries(float_tests PRIVATE canvas)
+  add_test(NAME canvas_float COMMAND float_tests)
 endif()

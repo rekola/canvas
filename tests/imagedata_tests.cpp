@@ -1,6 +1,9 @@
 // Backend-independent ImageData tests.
 #include <canvas/Image.h>
+#include <canvas/Dither.h>
+#include <canvas/Half.h>
 #include <canvas/ImageData.h>
+#include <canvas/Palette.h>
 
 #include <cmath>
 #include <cstdio>
@@ -10,6 +13,8 @@ using namespace canvas;
 
 static int failures = 0;
 #define CHECK(c) do { if (!(c)) { std::printf("%s:%d: CHECK failed: %s\n", __FILE__, __LINE__, #c); failures++; } } while (0)
+
+static bool near(double a, double b, double tol) { return std::fabs(a - b) <= tol; }
 
 static const unsigned char * px(const ImageData & d, unsigned x, unsigned y) {
   return d.getData() + (y * d.getWidth() + x) * d.getNumChannels();
@@ -124,6 +129,48 @@ int main() {
     Color c;
     c = std::string("rgba(255, 0, 0, 0.5)");
     CHECK(c.red == 1.0f && c.alpha == 0.5f);
+  }
+  {  // Float ImageData conversions don't clamp; scaling and blur keep the range.
+    float px[8] = { 5.0f, 0.0f, 1.0f, 0.5f,   2.0f, 2.0f, 2.0f, 0.0f };
+    ImageData img(px, 2, 1, 4, PixelType::FLOAT32);
+    img.convertTo(ChannelOrder::BGR, true);
+    const float * d = img.getFloatData();
+    CHECK(d[0] == 0.5f && d[1] == 0.0f && d[2] == 2.5f && d[3] == 0.5f);
+    CHECK(d[4] == 0.0f && d[7] == 0.0f);
+    img.convertTo(ChannelOrder::RGB, false);
+    CHECK(near(img.getFloatData()[0], 5.0, 1e-6) && near(img.getFloatData()[2], 1.0, 1e-6));
+    ImageData flat(8, 8, 4, PixelType::FLOAT32);
+    for (size_t i = 0; i < 64; i++) { flat.getFloatData()[4 * i] = 20.0f; flat.getFloatData()[4 * i + 3] = 1.0f; }
+    auto big = flat.scale(16, 16);
+    CHECK(big->isFloat() && near(big->getFloatData()[4 * (8 * 16 + 8)], 20.0, 1e-3));
+    auto blurred = flat.blur(2, 2);
+    CHECK(blurred->isFloat() && near(blurred->getFloatData()[4 * (4 * 8 + 4)], 20.0, 0.5));
+  }
+  {  // colorize() of a mask: bytes, clamped, or floats when the colour is above 1.
+    ImageData mask(2, 1, 1);
+    mask.getData()[0] = 255;
+    mask.getData()[1] = 128;
+    auto hdr = mask.colorize(Color(4.0f, 2.0f, 0.5f, 0.5f));
+    CHECK(hdr->isFloat() && hdr->isPremultiplied() && hdr->getNumChannels() == 4);
+    CHECK(near(hdr->getFloatData()[0], 2.0, 1e-6) && near(hdr->getFloatData()[1], 1.0, 1e-6) && near(hdr->getFloatData()[3], 0.5, 1e-6));
+    CHECK(near(hdr->getFloatData()[4], 2.0 * 128 / 255, 1e-5));
+    auto sdr = mask.colorize(Color(1.0f, 0.5f, 0.0f, 1.0f));
+    CHECK(!sdr->isFloat() && sdr->getData()[0] == 255 && sdr->getData()[1] == 127 && sdr->getData()[3] == 255);
+  }
+  {  // FP16 conversion, for backends whose float surface is half.
+    float values[] = { 0.0f, 1.0f, -2.0f, 0.5f, 4.0f, 65504.0f, 0.000061035156f, 0.001f, 3.14159f, 1000.0f };
+    for (float v : values) {
+      float back = halfToFloat(floatToHalf(v));
+      CHECK(near(back, v, std::fabs(v) * 1e-3 + 1e-7));
+    }
+    CHECK(floatToHalf(1.0f) == 0x3c00 && floatToHalf(-2.0f) == 0xc000 && halfToFloat(0x3555) > 0.333f && halfToFloat(0x3555) < 0.334f);
+    CHECK(std::isinf(halfToFloat(floatToHalf(1e6f))) && floatToHalf(1e-9f) == 0);
+  }
+  {  // quantize() takes float images, clamped to [0, 1].
+    float px[4 * 2] = { 5.0f, 5.0f, 5.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f };
+    ImageData img(px, 2, 1, 4, PixelType::FLOAT32);
+    auto indices = quantize(img, Palette::xterm256());
+    CHECK(indices.size() == 2 && indices[0] != indices[1]);
   }
   return failures ? EXIT_FAILURE : EXIT_SUCCESS;
 }
