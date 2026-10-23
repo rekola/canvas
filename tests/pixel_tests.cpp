@@ -38,7 +38,7 @@ static int failures = 0;
 
 struct Px { int b, g, r, a; };
 
-static Px pixel(Context & ctx, unsigned x, unsigned y) {
+static Px pixel(Context & ctx, unsigned int x, unsigned int y) {
   auto img = ctx.getDefaultSurface().createImage(1.0f);
   const ImageData & d = img->getData();
   CHECK(d.getNumChannels() == 4);
@@ -50,9 +50,9 @@ static bool close_to(int a, int b, int tol = 2) { return std::abs(a - b) <= tol;
 static bool approxEq(double a, double b) { return std::abs(a - b) < 1e-3; }
 
 // The alpha of a column, summed over all rows.
-static int columnCoverage(Context & ctx, unsigned x) {
+static int columnCoverage(Context & ctx, unsigned int x) {
   int sum = 0;
-  for (unsigned y = 0; y < ctx.getActualHeight(); y++) sum += pixel(ctx, x, y).a;
+  for (unsigned int y = 0; y < ctx.getActualHeight(); y++) sum += pixel(ctx, x, y).a;
   return sum;
 }
 
@@ -97,7 +97,7 @@ int main() {
     ctx.lineWidth = 1.0f;
     ctx.beginPath().moveTo(0, 0).lineTo(16, 16).stroke();
     bool partial = false;
-    for (unsigned x = 1; x < 15; x++) {
+    for (unsigned int x = 1; x < 15; x++) {
       Px side = pixel(ctx, x + 1, x);
       if (side.a > 0 && side.a < 255) partial = true;
     }
@@ -141,8 +141,8 @@ int main() {
     for (int i = 0; i < 4; i++) { rgba[4 * i] = 255; rgba[4 * i + 1] = 0; rgba[4 * i + 2] = 0; rgba[4 * i + 3] = 255; }
     ImageData img(rgba, 2, 2, 4);
     ctx.drawImage(img, 4, 4, 2, 2);
-    for (unsigned y = 4; y < 6; y++)
-      for (unsigned x = 4; x < 6; x++) {
+    for (unsigned int y = 4; y < 6; y++)
+      for (unsigned int x = 4; x < 6; x++) {
         Px in = pixel(ctx, x, y);
         CHECK(in.a == 255 && in.r == 255 && in.g == 0 && in.b == 0);
       }
@@ -177,16 +177,16 @@ int main() {
   }
   {  // One channel is an alpha mask. Its rows are 5 bytes wide and Cairo pads
      // them to 8; every pixel must survive the round trip.
-    const unsigned w = 5, h = 3;
+    const unsigned int w = 5, h = 3;
     unsigned char mask[w * h];
-    for (unsigned i = 0; i < w * h; i++) mask[i] = (unsigned char)(10 + i * 10);
+    for (unsigned int i = 0; i < w * h; i++) mask[i] = (unsigned char)(10 + i * 10);
     TestContext ctx(w, h, 1);
     ctx.drawImage(ImageData(mask, w, h, 1), 0, 0, w, h);
     auto img = ctx.getDefaultSurface().createImage(1.0f);
     const ImageData & d = img->getData();
     CHECK(d.getNumChannels() == 1 && d.getWidth() == w && d.getHeight() == h);
     bool same = true;
-    for (unsigned i = 0; i < w * h; i++) if (std::abs(d.getData()[i] - mask[i]) > 1) same = false;
+    for (unsigned int i = 0; i < w * h; i++) if (std::abs(d.getData()[i] - mask[i]) > 1) same = false;
     CHECK(same);
   }
   {  // Pixels read back from a surface say what they are.
@@ -456,8 +456,8 @@ int main() {
     ctx.drawImage(noise, 0, 0, 16, 16);
     int distinct = 0, worst = 0;
     int seen[256] = { 0 };
-    for (unsigned y = 0; y < 16; y++)
-      for (unsigned x = 0; x < 16; x++) {
+    for (unsigned int y = 0; y < 16; y++)
+      for (unsigned int x = 0; x < 16; x++) {
 	Px p = pixel(ctx, x, y);
 	int want = expected->getData().getData()[4 * (y * 16 + x)];
 	CHECK(p.a == 255);
@@ -557,7 +557,7 @@ int main() {
       ctx.lineWidth = 1.0f;  // 4 * scale px wide
       ctx.beginPath().moveTo(0, 20.0 / 4 / scale).lineTo(8, 20.0 / 4 / scale).stroke();
       int rows = 0;
-      for (unsigned y = 10; y < 32; y++) rows += pixel(ctx, 10, y).a == 255;
+      for (unsigned int y = 10; y < 32; y++) rows += pixel(ctx, 10, y).a == 255;
       CHECK(rows == int(4 * scale));
       // The line settings still apply: a dashed hairline has gaps.
       ctx.setLineDash({ 1.0f, 1.0f });
@@ -577,7 +577,7 @@ int main() {
       ctx->strokeText("W", 4, 4);
     }
     int a = 0, b = 0;
-    for (unsigned x = 0; x < 128; x++) { a += columnCoverage(thin, x); b += columnCoverage(thick, x); }
+    for (unsigned int x = 0; x < 128; x++) { a += columnCoverage(thin, x); b += columnCoverage(thick, x); }
     CHECK(a > 0 && a <= b);
   }
 #ifdef CANVAS_HAS_QUARTZ
