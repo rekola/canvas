@@ -15,6 +15,21 @@ namespace canvas {
     BOTTOM
   };
   
+  // How far below the requested y the alphabetic baseline is drawn, given
+  // the font's ascent and descent (positive numbers, any unit). Hanging is
+  // approximated as 0.8 of the ascent, ideographic as the bottom of the
+  // font box.
+  inline float getBaselineOffset(TextBaseline baseline, float ascent, float descent) {
+    switch (baseline) {
+    case TextBaseline::TOP: return ascent;
+    case TextBaseline::HANGING: return 0.8f * ascent;
+    case TextBaseline::MIDDLE: return (ascent - descent) / 2;
+    case TextBaseline::IDEOGRAPHIC:
+    case TextBaseline::BOTTOM: return -descent;
+    default: return 0;
+    }
+  }
+
   class TextBaselineAttribute : public AttributeBase {
   public:
     TextBaselineAttribute(GraphicsState * _context, TextBaseline _value = TextBaseline::ALPHABETIC) : AttributeBase(_context), value(_value) { }

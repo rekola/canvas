@@ -483,16 +483,10 @@ CairoSurface::renderText(RenderMode mode, const Font & font, const Style & style
   
   auto x = p.x * displayScale, y = p.y * displayScale;
 
-  if (textBaseline == TextBaseline::MIDDLE || textBaseline == TextBaseline::TOP) {
+  if (textBaseline != TextBaseline::ALPHABETIC) {
     cairo_font_extents_t font_extents;
     cairo_font_extents(cr, &font_extents);
-    
-    switch (textBaseline) {
-      // case TextBaseline::MIDDLE: y -= (extents.height/2 + extents.y_bearing); break;
-    case TextBaseline::MIDDLE: y += -font_extents.descent + (font_extents.ascent + font_extents.descent) / 2.0; break;
-    case TextBaseline::TOP: y += font_extents.ascent; break;
-    default: break;
-    }
+    y += getBaselineOffset(textBaseline, font_extents.ascent, font_extents.descent);
   }
 
   if (textAlign != TextAlign::LEFT) {
@@ -544,13 +538,8 @@ CairoSurface::measureText(const Font & font, const std::string & text, TextBasel
   cairo_font_extents_t fe;
   cairo_font_extents(cr, &fe);
 
-  int baseline = 0;
-  if (textBaseline == TextBaseline::MIDDLE) {
-    baseline = (fe.ascent + fe.descent) / 2;
-  } else if (textBaseline == TextBaseline::TOP) {
-    baseline = (fe.ascent + fe.descent);
-  }
-  return TextMetrics((float) te.width / displayScale, (fe.descent - baseline) / displayScale, (fe.ascent - baseline) / displayScale); //, (float)te.height);
+  float offset = getBaselineOffset(textBaseline, fe.ascent, fe.descent);
+  return TextMetrics((float) te.width / displayScale, (fe.descent + offset) / displayScale, (fe.ascent - offset) / displayScale);
 }
 
 void

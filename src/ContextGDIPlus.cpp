@@ -379,13 +379,6 @@ GDIPlusSurface::renderText(RenderMode mode, const Font & font, const Style & sty
     style_bits |= Gdiplus::FontStyleItalic;
   }
 
-  switch (textBaseline) {
-  case TextBaseline::TOP: break;
-  case TextBaseline::HANGING: break;
-  case TextBaseline::MIDDLE: f.SetLineAlignment(Gdiplus::StringAlignmentCenter); break;
-  case TextBaseline::BOTTOM: f.SetLineAlignment(Gdiplus::StringAlignmentFar);
-  }
-
   switch (textAlign) {
   case TextAlign::CENTER: f.SetAlignment(Gdiplus::StringAlignmentCenter); break;
   case TextAlign::END: case TextAlign::RIGHT: f.SetAlignment(Gdiplus::StringAlignmentFar); break;
@@ -393,7 +386,13 @@ GDIPlusSurface::renderText(RenderMode mode, const Font & font, const Style & sty
   }
 
   Gdiplus::FontFamily family(L"Segoe UI Emoji");
-  Gdiplus::PointF pntF(x, y);
+
+  // The string is laid out from the top of its line box, which is one cell
+  // ascent above the alphabetic baseline; put that baseline at y plus the
+  // baseline offset (the same ascent and descent as measureText()).
+  float ascent = scaled_font_size * family.GetCellAscent(style_bits) / family.GetEmHeight(style_bits);
+  float descent = scaled_font_size * family.GetCellDescent(style_bits) / family.GetEmHeight(style_bits);
+  Gdiplus::PointF pntF(x, roundf(y + getBaselineOffset(textBaseline, ascent, descent) - ascent));
 
   switch (mode) {
   case RenderMode::STROKE:
@@ -460,14 +459,9 @@ GDIPlusSurface::measureText(const Font & font, const std::string & text, TextBas
   
   float ascent = gdi_font.GetSize() * fontFamily.GetCellAscent(style) / fontFamily.GetEmHeight(style);
   float descent = gdi_font.GetSize() * fontFamily.GetCellDescent(style) / fontFamily.GetEmHeight(style);
-  float baseline = 0;
-  if (textBaseline == TextBaseline::MIDDLE) {
-    baseline = (ascent + descent) / 2;
-  } else if (textBaseline == TextBaseline::TOP) {
-    baseline = (ascent + descent);
-  }
+  float offset = getBaselineOffset(textBaseline, ascent, descent);
   
-  return TextMetrics(size.Width / display_scale, (descent - baseline) / display_scale, (ascent - baseline) / display_scale);
+  return TextMetrics(size.Width / display_scale, (descent + offset) / display_scale, (ascent - offset) / display_scale);
 }
 
 class GDIPlusImage : public Image {
