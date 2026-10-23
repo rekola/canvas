@@ -231,11 +231,6 @@ To keep a hairline crisp, put it on a device pixel centre: logical
 
     context.lineWidth(0.0f).beginPath().moveTo(0, 5.5 / scale).lineTo(width, 5.5 / scale).stroke();
 
-Linux
-=====
-
-For input images, only PNG-files are supported.
-
 Windows
 =======
 
