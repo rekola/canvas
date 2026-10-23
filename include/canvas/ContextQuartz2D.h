@@ -7,6 +7,7 @@
 #include <CoreText/CoreText.h>
 #include "FilenameConverter.h"
 
+#include <TargetConditionals.h>
 #include <unordered_map>
 
 namespace canvas {
@@ -20,6 +21,7 @@ namespace canvas {
 #endif
       CGColorSpaceRelease(colorspace);
       CGColorSpaceRelease(colorspace_gray);
+      CGColorSpaceRelease(colorspace_float);
       for (auto & fd : fonts) {
 #ifdef MEMDEBUG
 	// if (CFGetRetainCount(fd.second) != 1) std::cerr << "leaking memory B!\n";
@@ -45,6 +47,16 @@ namespace canvas {
     CGColorSpaceRef & getColorSpace() {
       if (!colorspace) colorspace = CGColorSpaceCreateDeviceRGB();
       return colorspace;
+    }
+    // The colour space of a float surface: extended range, so components
+    // are not clamped to [0, 1], and linear, so there is no transfer
+    // function. Every colour, gradient and image drawn on a float surface
+    // is created in this same space, so no colour conversion takes place
+    // and the numbers are drawn as given, whatever space the client means
+    // them to be in.
+    CGColorSpaceRef & getColorSpaceFloat() {
+      if (!colorspace_float) colorspace_float = CGColorSpaceCreateWithName(kCGColorSpaceExtendedLinearSRGB);
+      return colorspace_float;
     }
     CGColorSpaceRef & getColorSpaceGray() {
       if (!colorspace_gray) colorspace_gray = CGColorSpaceCreateDeviceGray();
@@ -100,7 +112,7 @@ namespace canvas {
       return CTFontCreateWithName(CFSTR("ArialMT"), size, NULL);
     }
 
-    CGColorSpaceRef colorspace = 0, colorspace_gray = 0;
+    CGColorSpaceRef colorspace = 0, colorspace_gray = 0, colorspace_float = 0;
     std::unordered_map<std::string, CTFontRef> fonts;
   };
   
@@ -108,21 +120,28 @@ namespace canvas {
   public:
     friend class ContextQuartz2D;
         
-  Quartz2DSurface(const std::shared_ptr<Quartz2DCache> & _cache, float _logical_width, float _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels)
-    : Surface(_logical_width, _logical_height, _actual_width, _actual_height, _num_channels), cache(_cache) {
+  Quartz2DSurface(const std::shared_ptr<Quartz2DCache> & _cache, float _logical_width, float _logical_height, unsigned int _actual_width, unsigned int _actual_height, unsigned int _num_channels, PixelType _type = PixelType::UINT8)
+    : Surface(_logical_width, _logical_height, _actual_width, _actual_height, _num_channels, _type), cache(_cache) {
+      checkPixelType(_num_channels, _type);
       if (_actual_width && _actual_height) {
-	unsigned int bitmapBytesPerRow;
-	if (_num_channels == 1) {
-	  bitmapBytesPerRow = _actual_width;
-	} else {
-	  bitmapBytesPerRow = _actual_width * 4;
-	}
-        unsigned int bitmapByteCount = bitmapBytesPerRow * _actual_height;
+	size_t bitmapByteCount = size_t(getBytesPerRow()) * _actual_height;
         bitmapData = new unsigned char[bitmapByteCount];
         memset(bitmapData, 0, bitmapByteCount);
+        createFloatContext();
       }
   }
+
+    // Float surfaces are 32-bit float RGBA bitmap contexts in an
+    // extended linear colour space (macOS; iOS has no such contexts here).
+    static bool isFloatSupported() {
+#if TARGET_OS_OSX
+      return true;
+#else
+      return false;
+#endif
+    }
   
+    // A float image makes a float surface (bytes make a byte surface).
     Quartz2DSurface(const std::shared_ptr<Quartz2DCache> & _cache, const ImageData & image);  
     
     ~Quartz2DSurface() {
@@ -304,9 +323,27 @@ namespace canvas {
   protected:
     std::unique_ptr<ImageData> readPixels() override;
     void sendPath(const Path2D & path, float display_scale);
+    // On a float surface the colour is made in the surface's own space, so
+    // that nothing is converted or clamped.
     CGColorRef createCGColor(const Color & color, float globalAlpha = 1.0f) {
       CGFloat cv[] = { color.red, color.green, color.blue, color.alpha * globalAlpha};
-      return CGColorCreate(cache->getColorSpace(), cv);
+      return CGColorCreate(isFloat() ? cache->getColorSpaceFloat() : cache->getColorSpace(), cv);
+    }
+    bool isFloat() const { return getPixelType() == PixelType::FLOAT32; }
+    size_t getBytesPerRow() const {
+      return getNumChannels() == 1 ? getActualWidth() : size_t(getActualWidth()) * (isFloat() ? 16 : 4);
+    }
+    static void checkPixelType(unsigned int num_channels, PixelType type) {
+      if (type != PixelType::FLOAT32) return;
+      if (!isFloatSupported()) throw UnsupportedFormatException("float surfaces need macOS");
+      if (num_channels != 4) throw UnsupportedFormatException("float surfaces have 4 channels");
+    }
+    // A float surface that cannot get its bitmap context is an error now,
+    // not a crash at the first draw.
+    void createFloatContext() {
+      if (!isFloat()) return;
+      initializeContext();
+      if (!gc) throw UnsupportedFormatException("Quartz refused a 32-bit float bitmap context");
     }
     
     void setShadow(float shadowOffsetX, float shadowOffsetY, float shadowBlur, const Color & shadowColor, float displayScale) {
@@ -329,7 +366,15 @@ namespace canvas {
 	// The memory is B, G, R, A (premultiplied) like the other backends;
 	// one channel is an alpha mask.
 	CGColorSpaceRef space = cache->getColorSpace();
-	if (getNumChannels() == 1) {
+	int bitsPerComponent = 8;
+	if (isFloat()) {
+	  // Premultiplied R, G, B, A as 32-bit floats, in the extended
+	  // linear space: the colour space of every colour drawn here.
+	  space = cache->getColorSpaceFloat();
+	  bitsPerComponent = 32;
+	  bitmapBytesPerRow = getActualWidth() * 16;
+	  bitmapInfo = kCGImageAlphaPremultipliedLast | kCGBitmapFloatComponents | kCGBitmapByteOrder32Little;
+	} else if (getNumChannels() == 1) {
 	  bitmapBytesPerRow = getActualWidth();
 	  bitmapInfo |= kCGImageAlphaOnly;
 	  space = 0;
@@ -342,7 +387,8 @@ namespace canvas {
 	} else {
 	  return;
 	}
-        gc = CGBitmapContextCreate(bitmapData, getActualWidth(), getActualHeight(), 8, bitmapBytesPerRow, space, bitmapInfo);
+        gc = CGBitmapContextCreate(bitmapData, getActualWidth(), getActualHeight(), bitsPerComponent, bitmapBytesPerRow, space, bitmapInfo);
+        if (!gc) return;
         CGContextSetInterpolationQuality(gc, kCGInterpolationHigh);
         CGContextSetShouldAntialias(gc, true);
 	flipY();
@@ -365,18 +411,18 @@ namespace canvas {
 
   class ContextQuartz2D : public Context {
   public:
-  ContextQuartz2D(const std::shared_ptr<Quartz2DCache> & _cache, unsigned int _width, unsigned int _height, unsigned int _num_channels, float _display_scale)
+  ContextQuartz2D(const std::shared_ptr<Quartz2DCache> & _cache, unsigned int _width, unsigned int _height, unsigned int _num_channels, float _display_scale, PixelType _type = PixelType::UINT8)
     : Context(_display_scale),
       cache(_cache),
-      default_surface(_cache, _width, _height, toPixels(_width, _display_scale), toPixels(_height, _display_scale), _num_channels)
+      default_surface(_cache, _width, _height, toPixels(_width, _display_scale), toPixels(_height, _display_scale), _num_channels, _type)
       {
       }
     // A default surface of exactly size pixels; the logical size is
     // size / _display_scale.
-    ContextQuartz2D(const std::shared_ptr<Quartz2DCache> & _cache, PixelSize size, unsigned int _num_channels, float _display_scale)
+    ContextQuartz2D(const std::shared_ptr<Quartz2DCache> & _cache, PixelSize size, unsigned int _num_channels, float _display_scale, PixelType _type = PixelType::UINT8)
     : Context(_display_scale),
       cache(_cache),
-      default_surface(_cache, size.width / _display_scale, size.height / _display_scale, size.width, size.height, _num_channels)
+      default_surface(_cache, size.width / _display_scale, size.height / _display_scale, size.width, size.height, _num_channels, _type)
       {
       }
 
@@ -390,6 +436,13 @@ namespace canvas {
       return std::unique_ptr<Surface>(new Quartz2DSurface(cache, size.width / getDisplayScale(), size.height / getDisplayScale(), size.width, size.height, _num_channels));
     }
         
+    bool supportsPixelType(PixelType type) const override {
+      return type == PixelType::UINT8 || Quartz2DSurface::isFloatSupported();
+    }
+    std::unique_ptr<Surface> createSurface(PixelSize size, unsigned int _num_channels, PixelType type) override {
+      return std::unique_ptr<Surface>(new Quartz2DSurface(cache, size.width / getDisplayScale(), size.height / getDisplayScale(), size.width, size.height, _num_channels, type));
+    }
+
     Surface & getDefaultSurface() override { return default_surface; }
     const Surface & getDefaultSurface() const override { return default_surface; }
     
@@ -420,6 +473,15 @@ namespace canvas {
       return std::unique_ptr<Surface>(new Quartz2DSurface(cache, size.width / getDisplayScale(), size.height / getDisplayScale(), size.width, size.height, num_channels));
     }
 
+    bool supportsPixelType(PixelType type) const override {
+      return type == PixelType::UINT8 || Quartz2DSurface::isFloatSupported();
+    }
+    std::unique_ptr<Context> createContext(PixelSize size, unsigned int num_channels, PixelType type) override {
+      return std::unique_ptr<Context>(new ContextQuartz2D(cache, size, num_channels, getDisplayScale(), type));
+    }
+    std::unique_ptr<Surface> createSurface(PixelSize size, unsigned int num_channels, PixelType type) override {
+      return std::unique_ptr<Surface>(new Quartz2DSurface(cache, size.width / getDisplayScale(), size.height / getDisplayScale(), size.width, size.height, num_channels, type));
+    }
     std::unique_ptr<Image> loadImage(const std::string & filename) override;
     std::unique_ptr<Image> createImage() override;
     std::unique_ptr<Image> createImage(const unsigned char * _data, unsigned int _width, unsigned int _height, unsigned int _num_channels) override;

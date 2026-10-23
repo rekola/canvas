@@ -32,7 +32,8 @@ namespace canvas {
   // Quantizes the image to palette indices, one byte per pixel, rows top to
   // bottom without padding (width * height bytes). The image is read by its
   // format (ImageData::getChannelOrder(), isPremultiplied()). One channel is
-  // taken as a grey level here, not as an alpha mask. An empty palette
+  // taken as a grey level here, not as an alpha mask. Float images are
+  // clamped to [0, 1] and scaled to bytes as they are. An empty palette
   // gives all zeros.
   std::vector<unsigned char> quantize(const ImageData & image, const Palette & palette, const DitherOptions & options = DitherOptions());
 };

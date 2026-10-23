@@ -31,6 +31,14 @@ namespace canvas {
     // A surface of exactly this many pixels; its logical size is
     // size / getDisplayScale() and may be fractional.
     virtual std::unique_ptr<Surface> createSurface(PixelSize size, unsigned int _num_channels) = 0;
+    // Whether surfaces of this pixel type can be made. Float (FLOAT32,
+    // 4 channels) needs backend support; see the README.
+    virtual bool supportsPixelType(PixelType type) const { return type == PixelType::UINT8; }
+    // Throws UnsupportedFormatException when !supportsPixelType(type).
+    virtual std::unique_ptr<Surface> createSurface(PixelSize size, unsigned int _num_channels, PixelType type) {
+      if (type != PixelType::UINT8) throw UnsupportedFormatException("this backend has no such pixel type");
+      return createSurface(size, _num_channels);
+    }
     virtual Surface & getDefaultSurface() = 0;
     virtual const Surface & getDefaultSurface() const = 0;
 
@@ -418,6 +426,16 @@ namespace canvas {
     // Exact pixel sizes; the logical size is size / getDisplayScale().
     virtual std::unique_ptr<Context> createContext(PixelSize size, unsigned int num_channels = 4) = 0;
     virtual std::unique_ptr<Surface> createSurface(PixelSize size, unsigned int num_channels = 4) = 0;
+    // As Context::supportsPixelType() and createSurface(PixelSize, channels, type).
+    virtual bool supportsPixelType(PixelType type) const { return type == PixelType::UINT8; }
+    virtual std::unique_ptr<Context> createContext(PixelSize size, unsigned int num_channels, PixelType type) {
+      if (type != PixelType::UINT8) throw UnsupportedFormatException("this backend has no such pixel type");
+      return createContext(size, num_channels);
+    }
+    virtual std::unique_ptr<Surface> createSurface(PixelSize size, unsigned int num_channels, PixelType type) {
+      if (type != PixelType::UINT8) throw UnsupportedFormatException("this backend has no such pixel type");
+      return createSurface(size, num_channels);
+    }
     virtual std::unique_ptr<Image> loadImage(const std::string & filename) = 0;
     virtual std::unique_ptr<Image> createImage() = 0;
     virtual std::unique_ptr<Image> createImage(const unsigned char * _data, unsigned int _width, unsigned int _height, unsigned int _num_channels) = 0;

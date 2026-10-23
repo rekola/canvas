@@ -2,11 +2,72 @@
 
 #include <algorithm>
 #include <cassert>
+#include <vector>
 
 #include <ImageIO/ImageIO.h>
 
 using namespace canvas;
 using namespace std;
+
+// The pixel as premultiplied r, g, b, a floats, whatever the image's format.
+// A mask is black with that alpha; bytes are v / 255 as they are.
+static void readPremultiplied(const ImageData & image, size_t i, float * out) {
+  unsigned int channels = image.getNumChannels();
+  bool bgr = image.getChannelOrder() == ChannelOrder::BGR;
+  float v[4] = { 0, 0, 0, 0 };
+  if (image.isFloat()) {
+    const float * p = image.getFloatData() + channels * i;
+    for (unsigned int c = 0; c < channels; c++) v[c] = p[c];
+  } else {
+    const unsigned char * p = image.getData() + channels * i;
+    for (unsigned int c = 0; c < channels; c++) v[c] = p[c] / 255.0f;
+  }
+  if (channels == 1) {
+    out[0] = out[1] = out[2] = 0.0f;
+    out[3] = v[0];
+    return;
+  }
+  out[0] = bgr ? v[2] : v[0];
+  out[1] = v[1];
+  out[2] = bgr ? v[0] : v[2];
+  out[3] = 1.0f;
+  if (channels == 4) {
+    out[3] = v[3];
+    if (!image.isPremultiplied()) {
+      for (int c = 0; c < 3; c++) out[c] *= v[3];
+    }
+  }
+}
+
+// Premultiplied RGBA floats, 4 per pixel, for a float surface or image.
+static std::vector<float> toNativeFloatPixels(const ImageData & image) {
+  size_t n = size_t(image.getWidth()) * image.getHeight();
+  std::vector<float> out(4 * n);
+  for (size_t i = 0; i < n; i++) readPremultiplied(image, i, &out[4 * i]);
+  return out;
+}
+
+// The same image as bytes, clamped to [0, 1], for a byte surface.
+static ImageData toByteImage(const ImageData & image) {
+  ImageData out(image.getWidth(), image.getHeight(), image.getNumChannels() == 1 ? 1 : 4);
+  out.setFormat(ChannelOrder::RGB, true);
+  size_t n = size_t(image.getWidth()) * image.getHeight();
+  auto to_byte = [](float v) { return (unsigned char)(std::min(1.0f, std::max(0.0f, v)) * 255.0f + 0.5f); };
+  for (size_t i = 0; i < n; i++) {
+    float px[4];
+    readPremultiplied(image, i, px);
+    if (out.getNumChannels() == 1) {
+      out.getData()[i] = to_byte(px[3]);
+    } else {
+      unsigned char a = to_byte(px[3]);
+      out.getData()[4 * i + 0] = std::min(a, to_byte(px[0]));
+      out.getData()[4 * i + 1] = std::min(a, to_byte(px[1]));
+      out.getData()[4 * i + 2] = std::min(a, to_byte(px[2]));
+      out.getData()[4 * i + 3] = a;
+    }
+  }
+  return out;
+}
 
 // Pixels as B, G, R, A premultiplied (Quartz's kCGImageAlphaPremultipliedFirst
 // with kCGBitmapByteOrder32Little), whatever format the image is in. One
@@ -42,17 +103,33 @@ static std::unique_ptr<unsigned char[]> toNativePixels(const ImageData & image) 
 }
 
 Quartz2DSurface::Quartz2DSurface(const std::shared_ptr<Quartz2DCache> & _cache, const ImageData & image)
-  : Surface(image.getWidth(), image.getHeight(), image.getWidth(), image.getHeight(), image.getNumChannels()), cache(_cache) {
+  : Surface(image.getWidth(), image.getHeight(), image.getWidth(), image.getHeight(), image.isFloat() ? 4 : image.getNumChannels(), image.getPixelType()), cache(_cache) {
   assert(getActualWidth() && getActualHeight());
-  size_t bitmapByteCount = (getNumChannels() == 1 ? 1 : 4) * size_t(getActualWidth()) * getActualHeight();
+  checkPixelType(getNumChannels(), getPixelType());
+  size_t bitmapByteCount = getBytesPerRow() * getActualHeight();
   bitmapData = new unsigned char[bitmapByteCount];
-  memcpy(bitmapData, toNativePixels(image).get(), bitmapByteCount);
+  if (isFloat()) {
+    auto pixels = toNativeFloatPixels(image);
+    memcpy(bitmapData, pixels.data(), bitmapByteCount);
+    createFloatContext();
+  } else {
+    memcpy(bitmapData, toNativePixels(image).get(), bitmapByteCount);
+  }
 }
 
 // Three channels are stored as 32-bit pixels; ImageData's are not.
 std::unique_ptr<ImageData>
 Quartz2DSurface::readPixels() {
   unsigned int w = getActualWidth(), h = getActualHeight(), channels = getNumChannels();
+  if (isFloat()) {
+    // Premultiplied R, G, B, A floats: the numbers that were drawn.
+    auto r = std::make_unique<ImageData>(w, h, 4, PixelType::FLOAT32);
+    r->setFormat(ChannelOrder::RGB, true);
+    auto src = (const unsigned char *)lockMemory(false);
+    if (src) memcpy(r->getData(), src, r->calculateSize());
+    releaseMemory();
+    return r;
+  }
   auto r = std::make_unique<ImageData>(w, h, channels);
   r->setFormat(ChannelOrder::BGR, channels == 4);
   auto src = (const unsigned char *)lockMemory(false);
@@ -108,10 +185,17 @@ Quartz2DSurface::renderPath(RenderMode mode, const TransformationMatrix & transf
   switch (mode) {
   case RenderMode::STROKE:
     sendPath(path, display_scale);
-    CGContextSetRGBStrokeColor(gc, style.color.red,
-			       style.color.green,
-			       style.color.blue,
-			       style.color.alpha * globalAlpha);
+    if (isFloat()) {
+      // In the surface's space, so that nothing is converted or clamped.
+      CGColorRef color = createCGColor(style.color, globalAlpha);
+      CGContextSetStrokeColorWithColor(gc, color);
+      CGColorRelease(color);
+    } else {
+      CGContextSetRGBStrokeColor(gc, style.color.red,
+				 style.color.green,
+				 style.color.blue,
+				 style.color.alpha * globalAlpha);
+    }
     CGContextSetLineWidth(gc, lineWidth * display_scale);
     switch (lineStyle.cap) {
     case LineCap::BUTT: CGContextSetLineCap(gc, kCGLineCapButt); break;
@@ -145,7 +229,7 @@ Quartz2DSurface::renderPath(RenderMode mode, const TransformationMatrix & transf
 	components.push_back(stop.second.blue);
 	components.push_back(stop.second.alpha * globalAlpha);
       }
-      CGGradientRef myGradient = CGGradientCreateWithColorComponents(cache->getColorSpace(), components.data(), locations.data(), locations.size());
+      CGGradientRef myGradient = CGGradientCreateWithColorComponents(isFloat() ? cache->getColorSpaceFloat() : cache->getColorSpace(), components.data(), locations.data(), locations.size());
 
       CGContextSaveGState(gc);
       sendPath(path, display_scale);
@@ -168,10 +252,16 @@ Quartz2DSurface::renderPath(RenderMode mode, const TransformationMatrix & transf
       CGGradientRelease(myGradient);
     } else {
       sendPath(path, display_scale);
-      CGContextSetRGBFillColor(gc, style.color.red,
-			       style.color.green,
-			       style.color.blue,
-			       style.color.alpha * globalAlpha);
+      if (isFloat()) {
+	CGColorRef color = createCGColor(style.color, globalAlpha);
+	CGContextSetFillColorWithColor(gc, color);
+	CGColorRelease(color);
+      } else {
+	CGContextSetRGBFillColor(gc, style.color.red,
+				 style.color.green,
+				 style.color.blue,
+				 style.color.alpha * globalAlpha);
+      }
       CGContextFillPath(gc);
     }
   }
@@ -197,26 +287,51 @@ Quartz2DSurface::resize(float _logical_width, float _logical_height, unsigned in
   delete[] bitmapData;
   
   assert(getActualWidth() && getActualHeight());
-  unsigned int bitmapByteCount = 4 * getActualWidth() * getActualHeight();
+  size_t bitmapByteCount = (isFloat() ? 16 : 4) * size_t(getActualWidth()) * getActualHeight();
   bitmapData = new unsigned char[bitmapByteCount];
   memset(bitmapData, 0, bitmapByteCount);
+  createFloatContext();
 }
 
 void
 Quartz2DSurface::drawImage(const ImageData & input, const Point & p, double w, double h, float displayScale, float globalAlpha, float shadowBlur, float shadowOffsetX, float shadowOffsetY, const Color & shadowColor, const Path2D & clipPath, bool imageSmoothingEnabled) {
   if (input.getNumChannels() < 1 || input.getNumChannels() > 4 || input.getNumChannels() == 2) return;
-  // Always drawn from native B, G, R, A premultiplied pixels (a mask is black with that alpha).
-  std::unique_ptr<unsigned char[]> native = toNativePixels(input);
-  size_t bytes_per_row = 4 * size_t(input.getWidth());
-  std::unique_ptr<unsigned char[]> with_color;
-  if (input.getNumChannels() == 1) {
-    size_t n = size_t(input.getWidth()) * input.getHeight();
-    with_color = std::make_unique<unsigned char[]>(4 * n);
-    for (size_t i = 0; i < n; i++) with_color[4 * i + 3] = native[i];
-    native = std::move(with_color);
+  if (input.isFloat() && !isFloat()) {
+    // A float image on a byte surface is clamped to [0, 1].
+    drawImage(toByteImage(input), p, w, h, displayScale, globalAlpha, shadowBlur, shadowOffsetX, shadowOffsetY, shadowColor, clipPath, imageSmoothingEnabled);
+    return;
   }
-  CGBitmapInfo bitmapInfo = kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little;
-  CGColorSpaceRef colorspace = cache->getColorSpace();
+  // Always drawn from native pixels: B, G, R, A premultiplied bytes, or on a
+  // float surface premultiplied R, G, B, A floats in the surface's own space
+  // (bytes are v / 255 as they are). A mask is black with that alpha.
+  std::unique_ptr<unsigned char[]> native;
+  std::vector<float> native_float;
+  size_t bytes_per_row;
+  int bitsPerComponent, bitsPerPixel;
+  CGBitmapInfo bitmapInfo;
+  CGColorSpaceRef colorspace;
+  if (isFloat()) {
+    native_float = toNativeFloatPixels(input);
+    bytes_per_row = 16 * size_t(input.getWidth());
+    bitsPerComponent = 32;
+    bitsPerPixel = 128;
+    bitmapInfo = kCGImageAlphaPremultipliedLast | kCGBitmapFloatComponents | kCGBitmapByteOrder32Little;
+    colorspace = cache->getColorSpaceFloat();
+  } else {
+    native = toNativePixels(input);
+    bytes_per_row = 4 * size_t(input.getWidth());
+    std::unique_ptr<unsigned char[]> with_color;
+    if (input.getNumChannels() == 1) {
+      size_t n = size_t(input.getWidth()) * input.getHeight();
+      with_color = std::make_unique<unsigned char[]>(4 * n);
+      for (size_t i = 0; i < n; i++) with_color[4 * i + 3] = native[i];
+      native = std::move(with_color);
+    }
+    bitsPerComponent = 8;
+    bitsPerPixel = 32;
+    bitmapInfo = kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little;
+    colorspace = cache->getColorSpace();
+  }
 
   initializeContext();
   
@@ -231,9 +346,7 @@ Quartz2DSurface::drawImage(const ImageData & input, const Point & p, double w, d
   if (has_shadow) {
     setShadow(shadowOffsetX, shadowOffsetY, shadowBlur, shadowColor, displayScale);
   }
-  int bitsPerComponent = 8;
-  int bitsPerPixel = 32;
-  auto cfdata = CFDataCreate(0, native.get(), input.getHeight() * bytes_per_row);
+  auto cfdata = CFDataCreate(0, isFloat() ? (const UInt8 *)native_float.data() : native.get(), input.getHeight() * bytes_per_row);
   auto provider = CGDataProviderCreateWithCFData(cfdata);
   auto img = CGImageCreate(input.getWidth(), input.getHeight(), bitsPerComponent, bitsPerPixel, bytes_per_row, colorspace, bitmapInfo, provider, 0, imageSmoothingEnabled, kCGRenderingIntentDefault);
   if (img) {
