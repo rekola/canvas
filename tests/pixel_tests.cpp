@@ -573,14 +573,13 @@ int main() {
       ctx->strokeStyle = "#ffffff";
       ctx->font.size = 24;
       ctx->lineWidth = ctx == &thin ? 0.0f : 1.0f;
-      ctx->textBaseline = TextBaseline::TOP;  // GDI+ draws from the top; keep the glyph on the surface
+      ctx->textBaseline = TextBaseline::TOP;  // keep the glyph on the surface
       ctx->strokeText("W", 4, 4);
     }
     int a = 0, b = 0;
     for (unsigned x = 0; x < 128; x++) { a += columnCoverage(thin, x); b += columnCoverage(thick, x); }
     CHECK(a > 0 && a <= b);
   }
-#ifndef CANVAS_HAS_GDIPLUS  // GDI+ draws every baseline from the top
   {  // Text baselines: metrics add up to the same font box and drawing agrees with them.
     TestContext ctx(96, 64);
     ctx.font.size = 24;
@@ -633,7 +632,6 @@ int main() {
     // Top > hanging > middle > alphabetic: the glyph hangs lower the higher the baseline.
     CHECK(rows[0] > rows[1] && rows[1] > rows[2] && rows[2] > rows[3]);
   }
-#endif
 #ifdef CANVAS_HAS_QUARTZ
   {  // The font family is honoured: monospace has one advance for every letter, the default does not.
     TestContext ctx(64, 32);
