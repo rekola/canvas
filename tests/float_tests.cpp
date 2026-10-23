@@ -33,23 +33,23 @@ struct F { float r, g, b, a; };  // premultiplied, as read back
 
 static bool near_to(double a, double b, double tol) { return std::fabs(a - b) <= tol; }
 
-static F fpx(Surface & surface, unsigned x, unsigned y) {
+static F fpx(Surface & surface, int x, int y) {
   auto d = surface.getImageData();
   CHECK(d->getPixelType() == PixelType::FLOAT32 && d->getNumChannels() == 4 && d->isPremultiplied());
-  const float * p = d->getFloatData() + (size_t(y) * d->getWidth() + x) * 4;
+  const float * p = d->getFloatData() + (size_t(y) * d->getWidth() + size_t(x)) * 4;
   if (d->getChannelOrder() == ChannelOrder::BGR) return { p[2], p[1], p[0], p[3] };
   return { p[0], p[1], p[2], p[3] };
 }
-static F fpx(Context & ctx, unsigned x, unsigned y) { return fpx(ctx.getDefaultSurface(), x, y); }
+static F fpx(Context & ctx, int x, int y) { return fpx(ctx.getDefaultSurface(), x, y); }
 
-static TestContext make(unsigned w, unsigned h, float scale = 1.0f) {
+static TestContext make(unsigned int w, unsigned int h, float scale = 1.0f) {
   return TestContext(PixelSize{ w, h }, 4, scale, PixelType::FLOAT32);
 }
 
 int main() {
   std::setvbuf(stdout, nullptr, _IONBF, 0);
   {
-    TestFactory factory(1.0f);
+    TestFactory factory(1.0f, nullptr);
     CHECK(factory.supportsPixelType(PixelType::UINT8));
     if (!factory.supportsPixelType(PixelType::FLOAT32)) {
       std::printf("float surfaces are not supported by this backend: skipped\n");
@@ -149,7 +149,7 @@ int main() {
     g.addColorStop(1.0f, Color(4.0f, 8.0f, 0.001f, 1.0f));
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, 16, 2);
-    for (unsigned x = 0; x < 16; x++) {
+    for (int x = 0; x < 16; x++) {
       double t = (x + 0.5) / 16;
       F p = fpx(ctx, x, 1);
       CHECK(near_to(p.r, 4.0 * t, 0.005) && near_to(p.g, 8.0 * t, 0.01) && near_to(p.b, 0.001, 5e-5));
@@ -219,7 +219,7 @@ int main() {
     c2.restore();
     CHECK(fpx(c2, 8, 8).r == 5.0f);
     bool partial = false;
-    for (unsigned x = 0; x < 16; x++) {
+    for (int x = 0; x < 16; x++) {
       F p = fpx(c2, x, 8);
       if (p.a > 0.05f && p.a < 0.95f) { partial = true; CHECK(near_to(p.r, 5.0 * p.a, 0.02)); }
     }
@@ -243,7 +243,7 @@ int main() {
     ctx.strokeText("I", 30, 18);
     d = ctx.getDefaultSurface().getImageData();
     float max_stroke = 0.0f;
-    for (unsigned y = 0; y < 24; y++) for (unsigned x = 28; x < 48; x++) max_stroke = std::max(max_stroke, d->getFloatData()[4 * (y * 48 + x)]);
+    for (int y = 0; y < 24; y++) for (int x = 28; x < 48; x++) max_stroke = std::max(max_stroke, d->getFloatData()[4 * (y * 48 + x)]);
     CHECK(max_stroke > 4.0f);
     // Subpixel text (component alpha) too.
     auto lcd = make(48, 24);
@@ -350,7 +350,7 @@ int main() {
     CHECK(fpx(ctx, 1, 1).r == 0.5f);
   }
   {  // Through the factory and context; the channel count is checked.
-    TestFactory factory(1.0f);
+    TestFactory factory(1.0f, nullptr);
     auto ctx = factory.createContext(PixelSize{ 4, 4 }, 4, PixelType::FLOAT32);
     CHECK(ctx->getDefaultSurface().getPixelType() == PixelType::FLOAT32);
     auto surface = factory.createSurface(PixelSize{ 4, 4 }, 4, PixelType::FLOAT32);
