@@ -219,15 +219,11 @@ namespace canvas {
       double x = p.x * display_scale;
       double y = p.y * display_scale;
 
-      if (textAlign != TextAlign::LEFT || textBaseline == TextBaseline::MIDDLE || textBaseline == TextBaseline::TOP) {
+      if (textAlign != TextAlign::LEFT || textBaseline != TextBaseline::ALPHABETIC) {
 	CGFloat ascent, descent, leading;
 	double width = CTLineGetTypographicBounds(line, &ascent, &descent, &leading);
 	
-	switch (textBaseline) {
-	case TextBaseline::MIDDLE: y += -descent + (ascent + descent) / 2.0; break;
-	case TextBaseline::TOP: y += ascent; break;
-	default: break;
-	}
+	y += getBaselineOffset(textBaseline, ascent, descent);
 	
 	switch (textAlign) {
         case TextAlign::LEFT: break;
@@ -300,7 +296,8 @@ namespace canvas {
 #endif
       CFRelease(text2);
       
-      return TextMetrics(width / display_scale);
+      float offset = getBaselineOffset(textBaseline, ascent, descent);
+      return TextMetrics(width / display_scale, (descent + offset) / display_scale, (ascent - offset) / display_scale);
     }
 
     void drawImage(Surface & surface, const Point & p, double w, double h, float displayScale, float globalAlpha, float shadowBlur, float shadowOffsetX, float shadowOffsetY, const Color & shadowColor, const Path2D & clipPath, bool imageSmoothingEnabled = true) override {

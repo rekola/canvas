@@ -498,15 +498,9 @@ public:
     float ascent = paint.getTextAscent();
     double x = p.x * displayScale, y = p.y * displayScale;
 
-    if (textBaseline == TextBaseline::MIDDLE || textBaseline == TextBaseline::TOP) {
-      if (textBaseline == TextBaseline::MIDDLE) {
-        env->CallVoidMethod(canvas, cache->canvasTextDrawMethod, jtext, x, y - (descent + ascent) / 2, paint.getObject());
-      } else if (textBaseline == TextBaseline::TOP) {
-        env->CallVoidMethod(canvas, cache->canvasTextDrawMethod, jtext, x, y - (descent + ascent), paint.getObject());
-      }
-    } else {
-      env->CallVoidMethod(canvas, cache->canvasTextDrawMethod, jtext, x, y, paint.getObject());
-    }
+    // Paint's ascent is negative (above the baseline) and descent positive.
+    y += getBaselineOffset(textBaseline, -ascent, descent);
+    env->CallVoidMethod(canvas, cache->canvasTextDrawMethod, jtext, x, y, paint.getObject());
 
     env->DeleteLocalRef(jtext);
   }
@@ -519,18 +513,10 @@ public:
     float descent = paint.getTextDescent();
     float ascent = paint.getTextAscent();
 
-    //Change ascent and descent according to baseline
-    float baseline = 0;
-    if (textBaseline == TextBaseline::MIDDLE) {
-      baseline = (ascent + descent) / 2;
-    } else if (textBaseline == TextBaseline::TOP) {
-      baseline = (ascent + descent);
-    }
+    // Paint's ascent is negative; the metrics are positive distances.
+    float offset = getBaselineOffset(textBaseline, -ascent, descent);
 
-    ascent -= baseline;
-    descent -= baseline;
-
-    return TextMetrics(textWidth / displayScale, descent / displayScale, ascent / displayScale);
+    return TextMetrics(textWidth / displayScale, (descent + offset) / displayScale, (-ascent - offset) / displayScale);
   }
 
   void drawImage(Surface & _img, const Point & p, double w, double h, float displayScale, float globalAlpha, float shadowBlur, float shadowOffsetX, float shadowOffsetY, const Color & shadowColor, const Path2D & clipPath, bool imageSmoothingEnabled = true) override {

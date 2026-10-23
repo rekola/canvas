@@ -580,6 +580,60 @@ int main() {
     for (unsigned x = 0; x < 128; x++) { a += columnCoverage(thin, x); b += columnCoverage(thick, x); }
     CHECK(a > 0 && a <= b);
   }
+#ifndef CANVAS_HAS_GDIPLUS  // GDI+ draws every baseline from the top
+  {  // Text baselines: metrics add up to the same font box and drawing agrees with them.
+    TestContext ctx(96, 64);
+    ctx.font.size = 24;
+    const TextBaseline all[] = { TextBaseline::TOP, TextBaseline::HANGING, TextBaseline::MIDDLE, TextBaseline::ALPHABETIC, TextBaseline::IDEOGRAPHIC, TextBaseline::BOTTOM };
+    ctx.textBaseline = TextBaseline::ALPHABETIC;
+    auto alpha = ctx.measureText("H");
+    float box = alpha.fontBoundingBoxAscent + alpha.fontBoundingBoxDescent;
+    CHECK(alpha.fontBoundingBoxAscent > 0 && alpha.fontBoundingBoxDescent > 0);
+    for (auto b : all) {
+      ctx.textBaseline = b;
+      auto m = ctx.measureText("H");
+      CHECK(std::abs(m.fontBoundingBoxAscent + m.fontBoundingBoxDescent - box) < 0.01f);
+    }
+    ctx.textBaseline = TextBaseline::TOP;
+    CHECK(std::abs(ctx.measureText("H").fontBoundingBoxAscent) < 0.01f);
+    ctx.textBaseline = TextBaseline::BOTTOM;
+    CHECK(std::abs(ctx.measureText("H").fontBoundingBoxDescent) < 0.01f);
+    ctx.textBaseline = TextBaseline::MIDDLE;
+    {
+      auto m = ctx.measureText("H");
+      CHECK(std::abs(m.fontBoundingBoxAscent - m.fontBoundingBoxDescent) < 0.01f);
+    }
+    ctx.textBaseline = TextBaseline::HANGING;
+    {
+      auto m = ctx.measureText("H");
+      CHECK(m.fontBoundingBoxAscent > 0 && m.fontBoundingBoxAscent < alpha.fontBoundingBoxAscent);
+    }
+
+    // The lowest inked row of "H" (it has no descender) moves with the baseline.
+    auto lowest = [](Context & c) {
+      int row = -1;
+      for (unsigned y = 0; y < c.getActualHeight(); y++)
+        for (unsigned x = 0; x < c.getActualWidth(); x++)
+          if (pixel(c, x, y).a > 128) row = int(y);
+      return row;
+    };
+    int rows[6];
+    for (int i = 0; i < 6; i++) {
+      TestContext c(96, 64);
+      c.font.size = 24;
+      c.fillStyle = "#ffffff";
+      c.textBaseline = all[i];
+      c.fillText("H", 8, 32);
+      rows[i] = lowest(c);
+    }
+    // Alphabetic: the glyph sits on y = 32.
+    CHECK(rows[3] >= 30 && rows[3] <= 32);
+    // Bottom and ideographic: the descent below the glyph, so the glyph ends higher.
+    CHECK(rows[5] < rows[3] - 2 && rows[4] == rows[5]);
+    // Top > hanging > middle > alphabetic: the glyph hangs lower the higher the baseline.
+    CHECK(rows[0] > rows[1] && rows[1] > rows[2] && rows[2] > rows[3]);
+  }
+#endif
 #ifdef CANVAS_HAS_QUARTZ
   {  // The font family is honoured: monospace has one advance for every letter, the default does not.
     TestContext ctx(64, 32);

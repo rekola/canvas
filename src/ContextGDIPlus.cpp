@@ -460,14 +460,9 @@ GDIPlusSurface::measureText(const Font & font, const std::string & text, TextBas
   
   float ascent = gdi_font.GetSize() * fontFamily.GetCellAscent(style) / fontFamily.GetEmHeight(style);
   float descent = gdi_font.GetSize() * fontFamily.GetCellDescent(style) / fontFamily.GetEmHeight(style);
-  float baseline = 0;
-  if (textBaseline == TextBaseline::MIDDLE) {
-    baseline = (ascent + descent) / 2;
-  } else if (textBaseline == TextBaseline::TOP) {
-    baseline = (ascent + descent);
-  }
+  float offset = getBaselineOffset(textBaseline, ascent, descent);
   
-  return TextMetrics(size.Width / display_scale, (descent - baseline) / display_scale, (ascent - baseline) / display_scale);
+  return TextMetrics(size.Width / display_scale, (descent + offset) / display_scale, (ascent - offset) / display_scale);
 }
 
 class GDIPlusImage : public Image {
