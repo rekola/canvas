@@ -72,6 +72,7 @@ namespace canvas {
 
     float encode(float x) {
       x = std::clamp(x, 0.0f, 1.0f);
+      if (x >= 1.0f) return 1.0f;  // exactly, so white is 255 and not 254.99998
       return x <= 0.0031308f ? 12.92f * x : 1.055f * std::pow(x, 1.0f / 2.4f) - 0.055f;
     }
   }

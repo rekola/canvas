@@ -22,6 +22,7 @@ namespace canvas {
 #include <canvas/Context.h>
 
 #include <cmath>
+#include <cstdlib>
 #include <cstdio>
 
 using namespace canvas;
@@ -30,6 +31,15 @@ static int failures = 0;
 #define CHECK(c) do { if (!(c)) { std::printf("%s:%d: CHECK failed: %s\n", __FILE__, __LINE__, #c); failures++; } } while (0)
 
 struct P { int r, g, b; };
+
+// Backends turn a float colour into a byte their own way (GDI+ truncates where
+// Cairo rounds), so a level is right to within one.
+static bool is(const P & p, int r, int g, int b, const char * what, int line) {
+  bool ok = std::abs(p.r - r) <= 1 && std::abs(p.g - g) <= 1 && std::abs(p.b - b) <= 1;
+  if (!ok) std::printf("%s:%d: %s is %d, %d, %d, expected %d, %d, %d\n", __FILE__, line, what, p.r, p.g, p.b, r, g, b);
+  return ok;
+}
+#define IS(p, r, g, b) do { if (!is(p, r, g, b, #p, __LINE__)) failures++; } while (0)
 
 // GDI+ has no float surfaces, so its constructor takes no pixel type.
 #if defined(CANVAS_HAS_GDIPLUS) && !defined(CANVAS_HAS_CAIRO)
@@ -61,21 +71,23 @@ int main() {
 #endif
   {  // The default is as given: 8-bit output is unchanged.
     P p = draw8(ColorSpace::AS_GIVEN, Color(1.0f, 0.0f, 0.5f, 1.0f));
-    CHECK(p.r == 255 && p.g == 0 && p.b == 128);
+    IS(p, 255, 0, 128);
   }
   {  // White stays white; a mid grey is encoded (linear 0.214 is half in sRGB).
     P w = draw8(ColorSpace::LINEAR_REC2020, Color(1.0f, 1.0f, 1.0f, 1.0f));
-    CHECK(w.r == 255 && w.g == 255 && w.b == 255);
+    IS(w, 255, 255, 255);
     P g = draw8(ColorSpace::LINEAR_REC2020, Color(0.2140f, 0.2140f, 0.2140f, 1.0f));
-    CHECK(std::abs(g.r - 128) <= 1 && std::abs(g.g - 128) <= 1 && std::abs(g.b - 128) <= 1);
+    IS(g, 128, 128, 128);
     P k = draw8(ColorSpace::LINEAR_REC2020, Color(0.0f, 0.0f, 0.0f, 1.0f));
-    CHECK(k.r == 0 && k.g == 0 && k.b == 0);
+    IS(k, 0, 0, 0);
   }
   {  // Light past white is compressed and washes toward white: brighter is paler.
     P a = draw8(ColorSpace::LINEAR_REC2020, Color(1.2f, 0.1f, 0.1f, 1.0f));
     P b = draw8(ColorSpace::LINEAR_REC2020, Color(3.0f, 0.1f, 0.1f, 1.0f));
     P c = draw8(ColorSpace::LINEAR_REC2020, Color(50.0f, 0.1f, 0.1f, 1.0f));
-    CHECK(a.r <= 255 && b.r == 255 && c.r == 255);
+    CHECK(a.r <= 255);
+    IS(P({ b.r, 0, 0 }), 255, 0, 0);
+    IS(P({ c.r, 0, 0 }), 255, 0, 0);
     CHECK(b.g > a.g && c.g > b.g && c.b > b.b);
   }
   {  // A colour outside sRGB is mapped in, not clipped to a corner.
