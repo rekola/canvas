@@ -4,6 +4,9 @@
 #if defined(CANVAS_HAS_CAIRO)
 #include <canvas/ContextCairo.h>
 namespace canvas { typedef ContextCairo TestContext; }
+#elif defined(CANVAS_HAS_GDIPLUS)
+#include <canvas/ContextGDIPlus.h>
+namespace canvas { typedef ContextGDIPlus TestContext; }
 #elif defined(CANVAS_HAS_QUARTZ)
 #include <canvas/ContextQuartz2D.h>
 namespace canvas {
@@ -16,6 +19,7 @@ namespace canvas {
 #endif
 
 #include <canvas/ColorSpace.h>
+#include <canvas/Context.h>
 
 #include <cmath>
 #include <cstdio>
@@ -27,6 +31,14 @@ static int failures = 0;
 
 struct P { int r, g, b; };
 
+// GDI+ has no float surfaces, so its constructor takes no pixel type.
+#if defined(CANVAS_HAS_GDIPLUS) && !defined(CANVAS_HAS_CAIRO)
+#define CANVAS_TEST_NO_FLOAT 1
+static TestContext make(unsigned int w, unsigned int h, PixelType) { return TestContext(PixelSize{ w, h }, 4, 1.0f); }
+#else
+static TestContext make(unsigned int w, unsigned int h, PixelType type) { return TestContext(PixelSize{ w, h }, 4, 1.0f, type); }
+#endif
+
 static P bytes(Context & ctx, int x, int y) {
   auto d = ctx.getDefaultSurface().getImageData();
   const unsigned char * p = d->getData() + (size_t(y) * d->getWidth() + size_t(x)) * d->getNumChannels();
@@ -35,7 +47,7 @@ static P bytes(Context & ctx, int x, int y) {
 }
 
 static P draw8(ColorSpace cs, const Color & c) {
-  TestContext ctx(PixelSize{ 4, 4 }, 4, 1.0f, PixelType::UINT8);
+  TestContext ctx = make(4, 4, PixelType::UINT8);
   ctx.setInputColorSpace(cs);
   ctx.fillStyle = c;
   ctx.fillRect(0, 0, 4, 4);
@@ -43,6 +55,10 @@ static P draw8(ColorSpace cs, const Color & c) {
 }
 
 int main() {
+  std::setvbuf(stdout, nullptr, _IONBF, 0);
+#if defined(CANVAS_HAS_GDIPLUS) && !defined(CANVAS_HAS_CAIRO)
+  ContextGDIPlus::initialize();
+#endif
   {  // The default is as given: 8-bit output is unchanged.
     P p = draw8(ColorSpace::AS_GIVEN, Color(1.0f, 0.0f, 0.5f, 1.0f));
     CHECK(p.r == 255 && p.g == 0 && p.b == 128);
@@ -69,7 +85,7 @@ int main() {
     CHECK(p.r == 0 && p.g > 200 && p.g < 255 && p.b > 50);
   }
   {  // A gradient across white follows the map, not a line between its mapped ends.
-    TestContext ctx(PixelSize{ 64, 4 }, 4, 1.0f, PixelType::UINT8);
+    TestContext ctx = make(64, 4, PixelType::UINT8);
     ctx.setInputColorSpace(ColorSpace::LINEAR_REC2020);
     auto g = ctx.createLinearGradient(0, 0, 64, 0);
     g.addColorStop(0.0f, Color(0.2f, 0.2f, 0.2f, 1.0f));
@@ -81,8 +97,9 @@ int main() {
     P low = bytes(ctx, 4, 1);
     CHECK(low.r < 200);
   }
+#ifndef CANVAS_TEST_NO_FLOAT
   {  // A float surface keeps the numbers.
-    TestContext ctx(PixelSize{ 4, 4 }, 4, 1.0f, PixelType::FLOAT32);
+    TestContext ctx = make(4, 4, PixelType::FLOAT32);
     ctx.setInputColorSpace(ColorSpace::LINEAR_REC2020);
     ctx.fillStyle = Color(5.0f, 0.25f, 0.0f, 1.0f);
     ctx.fillRect(0, 0, 4, 4);
@@ -91,6 +108,7 @@ int main() {
     bool bgr = d->getChannelOrder() == ChannelOrder::BGR;
     CHECK((bgr ? f[2] : f[0]) == 5.0f && f[1] == 0.25f);
   }
+#endif
   {  // The mapping on its own.
     Color c = linearRec2020ToSrgb(Color(1.0f, 1.0f, 1.0f, 0.5f));
     CHECK(std::fabs(c.red - 1.0f) < 1e-5f && std::fabs(c.alpha - 0.5f) < 1e-6f);
