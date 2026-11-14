@@ -16,7 +16,8 @@ namespace canvas {
   // gamma-encoded values blend as gamma-encoded numbers. Alpha is never a
   // colour: it is a coverage in [0, 1]. Colours are straight (not
   // premultiplied); gradient stops are interpolated in that straight form.
-  // 8-bit surfaces clamp to [0, 1] as always.
+  // 8-bit surfaces clamp to [0, 1] as always, unless the context says its
+  // colours are linear Rec.2020 (ColorSpace.h), when they are mapped to sRGB.
   class Color {
   public:
     static Color BLACK, WHITE, RED;
