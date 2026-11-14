@@ -105,6 +105,32 @@ namespace canvas {
       }
     }
     
+    // A copy with every colour (the solid one and the gradient stops) passed
+    // through `map`. A gradient gets `steps` stops between each pair of its
+    // stops, interpolated in the colours as given, so a map that is not linear
+    // is followed along the gradient and not only at its ends.
+    template<class F> Style mapColors(F && map, int steps = 16) const {
+      Style s(*this);
+      s.color = map(color);
+      if (!colors.empty()) {
+	s.colors.clear();
+	const std::pair<const float, Color> * prev = nullptr;
+	for (auto & stop : colors) {
+	  if (prev && steps > 1) {
+	    for (int k = 1; k < steps; k++) {
+	      float t = float(k) / float(steps);
+	      const Color & a = prev->second, & b = stop.second;
+	      s.colors[prev->first + (stop.first - prev->first) * t] =
+		map(Color(a.red + (b.red - a.red) * t, a.green + (b.green - a.green) * t, a.blue + (b.blue - a.blue) * t, a.alpha + (b.alpha - a.alpha) * t));
+	    }
+	  }
+	  s.colors[stop.first] = map(stop.second);
+	  prev = &stop;
+	}
+      }
+      return s;
+    }
+
     Color color;
     Point p0, p1;
     double r0 = 0.0, r1 = 0.0;

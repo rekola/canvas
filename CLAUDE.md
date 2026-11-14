@@ -63,6 +63,14 @@ without a backend. Add a pixel test with every behaviour change.
   surface divided by `headroom` (`setSolidSource`, gradient stops,
   `ensureHeadroom()`), and use `CAIRO_FILTER_GOOD` there (BEST is lossy).
   8-bit output must stay byte-identical. Float tests: `tests/float_tests.cpp`.
+- **Input colour space.** `Context::setInputColorSpace(LINEAR_REC2020)` is
+  opt-in; the default draws colours as given and 8-bit output stays
+  byte-identical. With it an 8-bit surface maps every colour it is given
+  (`Context::mapStyle()`/`mappedShadowColor()`, in the base `Context`, so every
+  backend gets it) through `linearRec2020ToSrgb()` (`ColorSpace.cpp`); a float
+  surface keeps the numbers. Keep the mapping in `Context`, not in a backend,
+  and keep it identical to cellui's `Color::toSrgb8()` (gamut map, then the
+  neutral tone map with its knee at 1). Tests: `tests/colorspace_tests.cpp`.
 - **State follows HTML5 too.** `save()`/`restore()` cover the drawing
   state (styles, transform, clip, line settings) but not the current path.
   Every setter, transform and path call returns `Context&`, so calls

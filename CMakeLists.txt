@@ -16,6 +16,7 @@ option(CANVAS_BUILD_TESTS "Build the tests" ${PROJECT_IS_TOP_LEVEL})
 add_library(canvas
   src/Color.cpp
   src/ColorProvider.cpp
+  src/ColorSpace.cpp
   src/Dither.cpp
   src/Image.cpp
   src/ImageData.cpp

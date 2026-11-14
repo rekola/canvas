@@ -104,6 +104,21 @@ before. Bytes drawn on a float surface (`drawImage()` of an 8-bit
 `ImageData`) are `v / 255` as they are, so linearize them first if they are
 encoded, and a float image drawn on a byte surface is clamped.
 
+**Input colour space (optional).** By default colours are drawn as given, as
+above. `Context::setInputColorSpace(ColorSpace::LINEAR_REC2020)` says that the
+colours given are linear Rec.2020 light with 1.0 as SDR white, HDR above it. A
+float surface still draws the numbers as given. An 8-bit surface maps each
+colour it is given (fill and stroke styles, gradient stops, the shadow colour)
+to what sRGB can show with `linearRec2020ToSrgb()`: the gamut is mapped by
+reducing chroma at the colour's own OKLab lightness and hue, light past white is
+compressed toward 1 and washes toward white the more there is (a very bright
+colour gets a pale core instead of a flat plateau of its own hue), and the
+result is sRGB encoded. A caller can therefore draw the same HDR colours on
+whichever surface it was given. A gradient gets 16 stops between each pair of
+its stops, interpolated in linear light, so it follows the map and not a line
+between its mapped ends. Images (`drawImage()`) are pixels, not colours, and
+are never mapped. The setting is not part of the drawing state.
+
 Read-back keeps the convention that the surface hands out its own layout,
 tagged: `getImageData()` / `createImage()` give `ImageData` with
 `PixelType::FLOAT32` (`getFloatData()`, 4 floats per pixel, rows without
