@@ -5,6 +5,9 @@
 
 namespace canvas {
   namespace {
+    // How far below 0 a component may be, in linear light, and still count as inside the gamut.
+    constexpr float kGamutSlack = 1e-5f;
+
     inline float finite(float x) { return std::isfinite(x) ? x : 0.0f; }
 
     // Linear Rec.2020 to linear Rec.709 (the primaries of sRGB), D65.
@@ -80,7 +83,9 @@ namespace canvas {
   Color linearRec2020ToSrgb(const Color & c) {
     float in[3] = { finite(c.red), finite(c.green), finite(c.blue) }, v[3];
     toLinearSrgb(in, v);
-    if (std::min({ v[0], v[1], v[2] }) < 0.0f) reduceChroma(v);
+    // A primary of sRGB is on the edge of the gamut, and how a build rounds the conversion leaves a component a
+    // hair below 0: that is not a colour to map (reducing its chroma would dull it), only to clamp.
+    if (std::min({ v[0], v[1], v[2] }) < -kGamutSlack) reduceChroma(v);
     toneMap(v);
     return Color(encode(v[0]), encode(v[1]), encode(v[2]), c.alpha);
   }
