@@ -110,6 +110,27 @@ int main() {
     CHECK(low.r < 200);
   }
 #ifndef CANVAS_TEST_NO_FLOAT
+  {  // The primaries of sRGB are on the gamut's edge, and how a build rounds the primaries conversion leaves a
+     // component a hair either side of it; that is not out of gamut, so every level of a primary stays exact.
+    // (A build with fused multiply-adds hides the noise; one without them shows it.)
+    const double m[3][3] = { { 0.6274039, 0.3292830, 0.0433131 }, { 0.0690973, 0.9195404, 0.0113623 }, { 0.0163914, 0.0880133, 0.8955953 } };
+    int bad = 0;
+    for (int i = 0; i < 256; i++) {
+      double lin = i <= 10 ? i / 255.0 / 12.92 : std::pow((i / 255.0 + 0.055) / 1.055, 2.4);
+      for (int channel = 0; channel < 3; channel++) {
+        float rgb[3];
+        for (int k = 0; k < 3; k++) rgb[k] = static_cast<float>(m[k][channel] * lin);
+        P p = draw8(ColorSpace::LINEAR_REC2020, Color(rgb[0], rgb[1], rgb[2], 1.0f));
+        int expect[3] = { 0, 0, 0 };
+        expect[channel] = i;
+        if (std::abs(p.r - expect[0]) > 1 || std::abs(p.g - expect[1]) > 1 || std::abs(p.b - expect[2]) > 1) {
+          if (bad < 3) std::printf("primary %d level %d: got %d, %d, %d\n", channel, i, p.r, p.g, p.b);
+          bad++;
+        }
+      }
+    }
+    CHECK(bad == 0);
+  }
   {  // A float surface keeps the numbers.
     TestContext ctx = make(4, 4, PixelType::FLOAT32);
     ctx.setInputColorSpace(ColorSpace::LINEAR_REC2020);
