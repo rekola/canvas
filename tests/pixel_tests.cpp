@@ -114,6 +114,25 @@ int main() {
     CHECK(close_to(pixel(ctx, 4, 1).a, 128) && close_to(pixel(ctx, 4, 2).a, 128));
     CHECK(pixel(ctx, 4, 5).a == 255 && pixel(ctx, 4, 4).a == 0 && pixel(ctx, 4, 6).a == 0);
   }
+  {  // A wider line covers more rows, centred on its coordinate: an odd width on a .5 coordinate and an even one on an
+     // integer fill whole rows; a width in between is partly covered at its edges.
+    TestContext ctx(8, 20);
+    ctx.strokeStyle = "#ffffff";
+    auto rows = [&](unsigned int from, unsigned int to) {
+      int covered = 0;
+      for (unsigned int y = from; y < to; y++) covered += pixel(ctx, 4, y).a == 255;
+      return covered;
+    };
+    ctx.lineWidth = 1.0f;
+    ctx.beginPath().moveTo(0, 2.5f).lineTo(8, 2.5f).stroke();
+    ctx.lineWidth = 3.0f;
+    ctx.beginPath().moveTo(0, 8.5f).lineTo(8, 8.5f).stroke();
+    ctx.lineWidth = 2.0f;
+    ctx.beginPath().moveTo(0, 15).lineTo(8, 15).stroke();
+    CHECK(rows(0, 5) == 1 && pixel(ctx, 4, 2).a == 255);
+    CHECK(rows(6, 12) == 3 && pixel(ctx, 4, 7).a == 255 && pixel(ctx, 4, 9).a == 255 && pixel(ctx, 4, 6).a == 0 && pixel(ctx, 4, 10).a == 0);
+    CHECK(rows(13, 18) == 2 && pixel(ctx, 4, 14).a == 255 && pixel(ctx, 4, 15).a == 255 && pixel(ctx, 4, 13).a == 0 && pixel(ctx, 4, 16).a == 0);
+  }
   {  // A polyline covers each of its segments.
     TestContext ctx(16, 16);
     ctx.strokeStyle = "#00ff00";
